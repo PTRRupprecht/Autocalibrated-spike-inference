@@ -6,7 +6,7 @@
 % This script section produces the variable "dt_all", which is then used for the
 % next section below
 
-cd('C:\Users\peter\Desktop\Spike_inference_with_GCaMP8\Cascade_GC8\Cascade\reannotated GT')
+cd('Autocalibrated-spike-inference/GT_autocalibration')
 
 GT_folders = {'DS09-GCaMP6f-m-V1',...
     'DS10-GCaMP6f-m-V1-neuropil-corrected',...
