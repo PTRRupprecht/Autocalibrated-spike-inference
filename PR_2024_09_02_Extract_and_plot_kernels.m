@@ -14,7 +14,7 @@ GT_folders = {'DS09-GCaMP6f-m-V1',...
     'DS11-GCaMP6f-m-V1-neuropil-corrected',...
     'DS13-GCaMP6s-m-V1-neuropil-corrected',...
     'DS14-GCaMP6s-m-V1',...
-    'DS29-GCaMP7f-m-V1','DS30-GCaMP8f-m-V1','DS31-GCaMP8m-m-V1','DS32-GCaMP8s-m-V1','DS33-Interneurons2023-m-V1',...
+    'DS29-GCaMP7f-m-V1','DS30-GCaMP8f-m-V1','DS31-GCaMP8m-m-V1','DS32-GCaMP8s-m-V1',...
     'DS06-GCaMP6f-zf-aDp','DS07-GCaMP6f-zf-dD','DS08-GCaMP6f-zf-OB'};
 
 % dt = delta_t = 1/(frame rate)
@@ -210,12 +210,12 @@ datasets = {'GC6f_v','GC6f_tg','GC6f_tg','GC6s_tg','GC6s_v','GC7f','GC8f','GC8m'
 colors = {'c','c','c','c','c','m','r','b','k','g','k','k','k'};
 
 figure(12125);
-for k = 1:11
+for k = 1:10
     timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
 %     timeX = timeX;
 
-    % average across datasets 11-14 if k=11
-    if k == 11
+    % average across datasets 10-12 if k=10
+    if k == 10
         transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
     else
         transient = nanmedian(kernel_averaged_all{k}');
@@ -248,11 +248,11 @@ set(gcf,'Position', [  360.0000  328.3333  628.3333  369.6667])
 
 half_rise_times_all = NaN*zeros(numel(kernel_averaged_all),100);
 % figure(121425);
-for k = 1:11
+for k = 1:10
     timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
     
 
-    if k == 11
+    if k == 10
         kernel_averaged_allX = [kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}'];
     else
         kernel_averaged_allX = [kernel_averaged_all{k}'];
@@ -279,7 +279,7 @@ end
 
 half_rise_times_all(abs(half_rise_times_all)>0.2*1000) = NaN;
 
-indices = [7 8 9 6 2 3 4 1 5 11];
+indices = [7 8 9 6 2 3 4 1 5 10];
 figure(446), boxplot(half_rise_times_all(indices,:)')
 xticklabels(datasets(indices))
 xtickangle(45)
