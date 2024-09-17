@@ -1,5 +1,3 @@
-%% Push Test - Fang
-
 %% Fig. 3: Kernels and Delays
 
 
@@ -223,7 +221,8 @@ for k = 1:10
 
     % subtract pre-spike baseline
     transient = transient - nanmean(transient(1:round(numel(transient)/2)));
-%     transient = transient/max(transient);
+
+%    transient = transient/max(transient);
     subplot(3,4,k)
     plot(timeX,transient,'Color',colors{k}); %hold on;
     
@@ -242,6 +241,38 @@ end
 hold off
 
 set(gcf,'Position', [  360.0000  328.3333  628.3333  369.6667])
+
+
+%Plotting all kernels in the same plot
+figure(12126);
+hold on;
+
+colors = {'c','c','c','c','c','m','r','b','k','g'};
+legends = {};
+
+for k = 1:10
+    timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
+    
+    if k == 10
+        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
+    else
+        transient = nanmedian(kernel_averaged_all{k}');
+    end
+    
+    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
+    plot(timeX, transient, 'Color', colors{k}, 'LineWidth', 2);
+    
+    legends{end+1} = datasets{k};
+end
+
+xlabel('Time (ms)');
+ylabel('dF/F');
+title('Comparison of Kernels Across Datasets');
+legend(legends, 'Location', 'eastoutside');
+grid on;
+xlim([-50 300]);
+ylim([-0.15 1.05]);
+hold off
 
 
 %% Boxplot of half rise times
@@ -287,3 +318,54 @@ box off;
 set(gca,'TickDir','out');
 set(gcf,'Position', [  360.0000  421.6667  345.0000  276.3333])
 ylabel('Half rise time (ms)')
+
+%% Quantitative analysis of kernel variation
+
+% Observe peak amplitudes
+peak_amplitudes = [];
+for k = 1:10
+    if k == 10
+        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
+    else
+        transient = nanmedian(kernel_averaged_all{k}');
+    end
+    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
+    peak_amplitudes(k) = max(transient);
+end
+
+% Maybe have a look at AUC?
+auc = [];
+for k = 1:10
+    timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
+    if k == 10
+        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
+    else
+        transient = nanmedian(kernel_averaged_all{k}');
+    end
+    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
+    auc(k) = trapz(timeX, transient);
+end
+
+% Decay time
+decay_times = [];
+for k = 1:10
+    timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
+    if k == 10
+        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
+    else
+        transient = nanmedian(kernel_averaged_all{k}');
+    end
+    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
+    peak = max(transient);
+    half_peak = peak / 2;
+    [~, peak_index] = max(transient);
+    decay_index = find(transient(peak_index:end) <= half_peak, 1, 'first') + peak_index - 1;
+    decay_times(k) = timeX(decay_index) - timeX(peak_index);
+end
+
+% Computing in a table
+variation_table = table(datasets(1:10)', peak_amplitudes', auc', decay_times', half_rise_times_all(1:10,1), ...
+    'VariableNames', {'Dataset', 'PeakAmplitude', 'AUC', 'DecayTime', 'HalfRiseTime'});
+
+disp(variation_table);
+
