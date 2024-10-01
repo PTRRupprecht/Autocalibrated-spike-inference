@@ -217,94 +217,13 @@ f) i) gradient descent on the parameters (amplitude and tau) ("gradient descent"
 A = zeros(16,16); A(4,6) = 1; A(7,10) = 1; A = rand(64,64);
 B = fspecial('gaussian',[3 3],1);
 
-figure, imagesc(conv2(A,B,'same'))
+Blurred_A = conv2(A,B,"same");
 figure, imagesc(A)
+figure, imagesc(Blurred_A)
 
  What is deconvolution?
 
+Restore_A = deconvreg(Blurred_A,B);
+figure, imagesc(Restore_A)
 
-
-
-
-
-
-
-
-% Initialize a cell array to store all transients for all neurons
-all_transients = cell(1, numel(filename));
-
-for file_idx = 1:numel(filename)
-    
-    % Initialize storage for all transients for this neuron
-    neuron_all_transients = [];
-    
-    % Process each recording for the current neuron
-    for index = 1:numel(all_CAttached{file_idx})
-        
-        % Read the variables of the current recording
-        time = all_CAttached{file_idx}{index}.fluo_time; % Time points of the fluorescence trace
-        fluo_trace = all_CAttached{file_idx}{index}.fluo_mean; % Fluorescence trace (in dF/F)
-        AP_times = all_CAttached{file_idx}{index}.events_AP / 1e4; % Action potential times (in seconds)
-        
-        % Extract and store all transients (4 seconds before until 4 seconds after)
-        for k = 1:numel(AP_times)
-            start_time = AP_times(k) - 4;
-            end_time = AP_times(k) + 4;
-            
-            % Find indices corresponding to the time window
-            transient_indices = find(time >= start_time & time <= end_time);
-            
-            if ~isempty(transient_indices)
-                % Extract the transient
-                transient_fluo = fluo_trace(transient_indices);
-                
-                % Store the transient
-                neuron_all_transients = [neuron_all_transients; transient_fluo'];
-            end
-        end
-    end
-    
-    % Store all transients for this neuron in the cell array
-    all_transients{file_idx} = neuron_all_transients;
-    
-    % a) Extract average calcium transient triggered by all action potentials (isolated or not)
-    if ~isempty(neuron_all_transients)
-        avg_transient = mean(neuron_all_transients, 1);
-        
-        % Plot average calcium transient
-        figure(file_idx * 100 + 3); % Separate figure for average transient
-        plot(-4:4, avg_transient, 'LineWidth', 2);
-        xlabel('Time (s) relative to AP');
-        ylabel('Fluorescence (dF/F)');
-        title(sprintf('Average Calcium Transient for Neuron %d', file_idx));
-        grid on;
-    end
-end
-
-
-% Comparison of average calcium transient from all APs vs isolated APs (Exercise 2b)
-for file_idx = 1:numel(filename)
-    
-    % Get transients for this neuron
-    neuron_all_transients = all_transients{file_idx};
-    isolated_transients = all_isolated_transients{file_idx};
-    
-    % Calculate average transients
-    if ~isempty(neuron_all_transients) && ~isempty(isolated_transients)
-        avg_transient_all = mean(neuron_all_transients, 1);
-        avg_transient_isolated = mean(isolated_transients, 1);
-        
-        % Plot comparison
-        figure(file_idx * 100 + 4); % Separate figure for comparison
-        plot(-4:4, avg_transient_all, '-o', 'LineWidth', 2, 'DisplayName', 'All APs');
-        hold on;
-        plot(-4:4, avg_transient_isolated, '-s', 'LineWidth', 2, 'DisplayName', 'Isolated APs');
-        hold off;
-        xlabel('Time (s) relative to AP');
-        ylabel('Fluorescence (dF/F)');
-        title(sprintf('Comparison of Average Calcium Transients for Neuron %d', file_idx));
-        legend show;
-        grid on;
-    end
-end
 
