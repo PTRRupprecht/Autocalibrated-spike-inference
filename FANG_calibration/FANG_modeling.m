@@ -32,19 +32,19 @@ for i = 1:length(CAttached)
 
     for j = 1:length(ap_events)
         t_since_ap = time - ap_events(j);
-        t_since_ap(t_since_ap < 0) = 0;
+        t_since_ap(t_since_ap < 0) = 1e12;
 
         % Double exponential template
-        simulated_trace = simulated_trace + amplitude * (exp(-t_since_ap / (tau_decay * dt)) - exp(-t_since_ap / (tau_rise * dt)));
+        simulated_trace = simulated_trace + amplitude * (exp(-t_since_ap / (tau_decay)) .* (1 - exp(-t_since_ap / (tau_rise))));
     end
 
     % calculate baseline
     measured_trace = cell_data.fluo_mean;
     baseline = nanmedian(measured_trace);
     
-    % add baseline fluctuation
+    % add baseline fluctuation?
     baseline_fluctuation = baseline * (1 + 0.1 * sin(2 * pi * time / max(time)));
-    simulated_trace = simulated_trace + baseline_fluctuation;
+    %simulated_trace = simulated_trace + baseline_fluctuation;
 
     % calculate the standard deviation of the noise based on the baseline
     noise_level = 0.1;
@@ -91,13 +91,13 @@ for i = 1:length(CAttached)
         simulated_trace = zeros(size(time));
         for j = 1:length(ap_events)
             t_since_ap = time - ap_events(j);
-            t_since_ap(t_since_ap < 0) = 0;
-            simulated_trace = simulated_trace + amplitude * (exp(-t_since_ap / (tau_decay * dt)) - exp(-t_since_ap / (tau_rise * dt)));
+            t_since_ap(t_since_ap < 0) = 1e12;
+            simulated_trace = simulated_trace + amplitude * (exp(-t_since_ap / (tau_decay)) .* (1 - exp(-t_since_ap / (tau_rise))));
         end
         
         % add baseline fluctuation
         baseline_fluctuation = baseline * (1 + 0.1 * sin(2 * pi * time / max(time)));
-        simulated_trace = simulated_trace + baseline_fluctuation;
+        %simulated_trace = simulated_trace + baseline_fluctuation;
 
         % add noise
         noise_level = 0.1;
@@ -115,11 +115,11 @@ for i = 1:length(CAttached)
         
         for j = 1:length(ap_events)
             t_since_ap = time - ap_events(j);
-            t_since_ap(t_since_ap < 0) = 0;
-            
-            grad_amplitude = grad_amplitude - 2 * mean((measured_trace - simulated_trace) .* (exp(-t_since_ap / (tau_decay * dt)) - exp(-t_since_ap / (tau_rise * dt))));
-            grad_tau_rise = grad_tau_rise + 2 * amplitude * mean((measured_trace - simulated_trace) .* (t_since_ap / (tau_rise^2 * dt)) .* exp(-t_since_ap / (tau_rise * dt)));
-            grad_tau_decay = grad_tau_decay - 2 * amplitude * mean((measured_trace - simulated_trace) .* (t_since_ap / (tau_decay^2 * dt)) .* exp(-t_since_ap / (tau_decay * dt)));
+            t_since_ap(t_since_ap < 0) = 1e12;
+            % use * or - here
+            grad_amplitude = grad_amplitude - 2 * mean((measured_trace - simulated_trace) .* (exp(-t_since_ap / (tau_decay)) .* (1 - exp(-t_since_ap / (tau_rise)))));
+            grad_tau_rise = grad_tau_rise + 2 * amplitude * mean((measured_trace - simulated_trace) .* (t_since_ap / (tau_rise^2)) .* exp(-t_since_ap / (tau_rise)));
+            grad_tau_decay = grad_tau_decay - 2 * amplitude * mean((measured_trace - simulated_trace) .* (t_since_ap / (tau_decay^2)) .* exp(-t_since_ap / (tau_decay)));
         end
 
         % update parameters
