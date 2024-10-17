@@ -1,9 +1,4 @@
-%% Fig. 3: Kernels and Delays
-
-
-%% Get an overview of statistics (frame rates and spike rates) of the ground truth data sets
-% This script section produces the variable "dt_all", which is then used for the
-% next section below
+%% Calculate dt and spike rate across datasets
 
 cd('Autocalibrated-spike-inference/GT_autocalibration')
 
@@ -60,7 +55,8 @@ for folder_index =  1:numel(GT_folders)
     %  %figure(411), plot((1:numel(spike_rate_GTX))/numel(spike_rate_GTX),sort(spike_rate_GTX)); hold on;
     
     % Print summary statistics for the current GT dataset
-    disp(['For dataset ',GT_folders{folder_index},', mean spike rate: ',num2str(spike_rate_GT_all(folder_index)),'; average framerate: ',num2str(1/dt_all(folder_index))])
+    disp(['For dataset ',GT_folders{folder_index},', mean spike rate: ',num2str(spike_rate_GT_all(folder_index)),...
+        '; average framerate: ',num2str(1/dt_all(folder_index))])
 
     cd ..
 
@@ -90,6 +86,7 @@ for folder_index = 1:numel(GT_folders)
         load(neuron_files(neuron_index).name)
 
         kernelX_all = [];
+
         % Go through all recordings done from the currently analyzed neuron
         for index = 1:numel(CAttached)
             
@@ -198,174 +195,133 @@ for folder_index = 1:numel(GT_folders)
 end
 
 
-%% Dataset names
+%% Calculate amplitudes for each neuron across all datasets
 
-datasets = {'GC6f','GC6f_C','GC6f_C','GC6s_C','GC6s','GC7f','GC8f','GC8m','GC8s','GC6f_zf'};
+% initialize cell array to store amplitudes and baselines
+neuron_amplitudes = cell(1, numel(GT_folders));
+neuron_baselines = cell(1, numel(GT_folders)); 
 
+% go through all GT datasets
+for folder_index = 1:numel(GT_folders)
+    
+    % get kernels for current dataset
+    dataset_kernels = kernel_averaged_all{folder_index};
+    
+    % initialize array to store amplitudes and baselines
+    amplitudes = zeros(1, size(dataset_kernels, 2));
+    baselines = zeros(1, size(dataset_kernels, 2)); 
 
-%% Plot all kernels; for each dataset in a separate subplot
+    % go through all neurons of current dataset
+    for neuron_index = 1:size(dataset_kernels, 2)
 
-colors = {'c','c','c','c','c','m','r','b','k','g','k','k','k'};
+        % get the kernel for current neuron
+        neuron_kernel = dataset_kernels(:, neuron_index);
+        
+        % calculate baseline from the raw fluorescence trace
+        baseline = nanmean(CAttached{index}.fluo_mean(1:round(numel(CAttached{index}.fluo_mean)/4)));
+        baselines(neuron_index) = baseline; 
+        
+        % calculate amplitude
+        amplitude = max(neuron_kernel) - baseline;
+        amplitudes(neuron_index) = amplitude;
 
-figure(12125);
-for k = 1:10
-    timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
-%     timeX = timeX;
-
-    % average across datasets 10-12 if k=10
-    if k == 10
-        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
-    else
-        transient = nanmedian(kernel_averaged_all{k}');
     end
 
-    % subtract pre-spike baseline
-    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
-
-%    transient = transient/max(transient);
-    subplot(3,4,k)
-    plot(timeX,transient,'Color',colors{k}); %hold on;
-    
-    box off;
-    set(gca,'TickDir','out');
-    ylim([-0.15 1.05])
-    xlim([min(timeX)+2 max(timeX)+0.001])
-%     xlim([-0.1 0.4])
-    xlim([-0.02 0.3]*1000)
-    grid on
-    xlabel('Time (ms)')
-    ylabel('dF/F')
-    title(datasets{k},'Interpreter','None')
-
+    % store amplitudes for current dataset
+    neuron_amplitudes{folder_index} = amplitudes;
+    % store baselines for current dataset
+    neuron_baselines{folder_index} = baselines; 
 end
-hold off
-
-set(gcf,'Position', [  360.0000  328.3333  628.3333  369.6667])
 
 
-%Plotting all kernels in the same plot
-figure(12126);
+%% Visualizations
+
+
+% simplified dataset names
+datasets = {'GC6f','GC6f_c','GC6f_c','GC6s_c','GC6s','GC7f','GC8f','GC8m','GC8s','GC6f_zf','GC6f_zf','GC6f_zf'};
+
+% define colors
+colors = {'k','k','k','c','c','m','r','b','g','k','k','k'}; 
+
+
+% Line graph
+figure;
 hold on;
+for i = 1:numel(neuron_amplitudes)
+    amplitudes_to_plot = sort(neuron_amplitudes{i}(neuron_amplitudes{i} <= 5)); 
+    plot(1:numel(amplitudes_to_plot), amplitudes_to_plot, 'DisplayName', datasets{i}, 'Color', colors{i});
+end
+hold off;
+title('Neuron Amplitudes Across Datasets');
+xlabel('Neuron Index');
+ylabel('Amplitude (dF/F)');
+legend('show', 'Location', 'eastoutside');
 
-colors = {'c','c','c','c','c','m','r','b','k','g'};
-legends = {};
 
-for k = 1:10
-    timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
+% Histogram
+figure;
+hold on;
+for i = 1:numel(neuron_amplitudes)
+    histogram(neuron_amplitudes{i}(neuron_amplitudes{i} < 5), 'DisplayName', datasets{i}, 'BinWidth', 0.05,...
+        'Normalization', 'probability', 'FaceColor', colors{i});
+end
+hold off;
+title('Distribution of Neuron Amplitudes');
+xlabel('Amplitude (dF/F)');
+ylabel('Probability');
+legend('show', 'Location', 'eastoutside');
+
+
+% Box plot
+figure;
+hold on;
+for i = 1:numel(neuron_amplitudes)
+    amplitudes_to_plot = neuron_amplitudes{i}(neuron_amplitudes{i} <= 5);
+    boxplot(amplitudes_to_plot, 'positions', i, 'colors', colors{i}); 
+end
+hold off;
+set(gca, 'xtick', 1:numel(datasets), 'xticklabel', datasets);
+xtickangle(45);
+
+
+%% Find optimal amplitudes for each calcium indicator
+
+
+% dataset names
+datasets = {'GC6f','GC6f_c','GC6f_c','GC6s_c','GC6s','GC7f','GC8f','GC8m','GC8s','GC6f_zf','GC6f_zf','GC6f_zf'};
+
+% initialize arrays to store relevant metrics
+mean_amplitudes = zeros(1, numel(GT_folders));
+median_amplitudes = zeros(1, numel(GT_folders));
+snr = zeros(1, numel(GT_folders));
+rise_times = zeros(1, numel(GT_folders));
+decay_times = zeros(1, numel(GT_folders));
+
+% calculate metrics for each dataset
+for folder_index = 1:numel(GT_folders)
+    amplitudes = neuron_amplitudes{folder_index};
+    baselines = neuron_baselines{folder_index};
+    kernels = kernel_averaged_all{folder_index};
     
-    if k == 10
-        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
-    else
-        transient = nanmedian(kernel_averaged_all{k}');
-    end
+    mean_amplitudes(folder_index) = mean(amplitudes);
+    median_amplitudes(folder_index) = median(amplitudes);
     
-    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
-    plot(timeX, transient, 'Color', colors{k}, 'LineWidth', 2);
+    % calculate SNR
+    snr(folder_index) = mean(amplitudes) / std(baselines);
     
-    legends{end+1} = datasets{k};
+    % calculate average rise and decay times
+    avg_kernel = mean(kernels, 2);
+    [~, peak_index] = max(avg_kernel);
+    half_max = max(avg_kernel) / 2;
+    
+    rise_time = find(avg_kernel(1:peak_index) > half_max, 1) * dt_all(folder_index);
+    decay_time = find(avg_kernel(peak_index:end) < half_max, 1) * dt_all(folder_index);
+    
+    rise_times(folder_index) = rise_time;
+    decay_times(folder_index) = decay_time;
 end
 
-xlabel('Time (ms)');
-ylabel('dF/F');
-title('Comparison of Kernels Across Datasets');
-legend(legends, 'Location', 'eastoutside');
-grid on;
-xlim([-50 300]);
-ylim([-0.15 1.05]);
-hold off
 
-
-%% Boxplot of half rise times
-
-half_rise_times_all = NaN*zeros(numel(kernel_averaged_all),100);
-% figure(121425);
-for k = 1:10
-    timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
-    
-
-    if k == 10
-        kernel_averaged_allX = [kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}'];
-    else
-        kernel_averaged_allX = [kernel_averaged_all{k}'];
-    end
-
-
-    clear half_rise_times
-    for jj = 1:size(kernel_averaged_all{k},2)
-        
-        transient = kernel_averaged_allX(jj,:);
-        transient = transient - nanmean(transient(1:round(numel(transient)/2)));
-        transient = transient/max(transient);
-    
-        change_point = find(transient>0.5,1,'first');
-        
-        half_rise_time_point = ((change_point-1)/abs(0.5-transient(change_point-1)) + change_point/abs(0.5-transient(change_point)))/(1/abs(0.5-transient(change_point-1)) + 1/abs(0.5-transient(change_point)));
-        
-        half_rise_times(jj) = interp1((change_point-1):change_point,timeX((change_point-1):change_point),half_rise_time_point);
-        
-    end
-
-    half_rise_times_all(k,(1:numel(half_rise_times))) = half_rise_times;
-end
-
-half_rise_times_all(abs(half_rise_times_all)>0.2*1000) = NaN;
-
-indices = [7 8 9 6 2 3 4 1 5 10];
-figure(446), boxplot(half_rise_times_all(indices,:)')
-xticklabels(datasets(indices))
-xtickangle(45)
-box off;
-set(gca,'TickDir','out');
-set(gcf,'Position', [  360.0000  421.6667  345.0000  276.3333])
-ylabel('Half rise time (ms)')
-
-%% Quantitative analysis of kernel variation
-
-% Observe peak amplitudes
-peak_amplitudes = [];
-for k = 1:10
-    if k == 10
-        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
-    else
-        transient = nanmedian(kernel_averaged_all{k}');
-    end
-    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
-    peak_amplitudes(k) = max(transient);
-end
-
-% Maybe have a look at AUC?
-auc = [];
-for k = 1:10
-    timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
-    if k == 10
-        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
-    else
-        transient = nanmedian(kernel_averaged_all{k}');
-    end
-    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
-    auc(k) = trapz(timeX, transient);
-end
-
-% Decay time
-decay_times = [];
-for k = 1:10
-    timeX = ((1:size(kernel_averaged_all{k},1)) - (size(kernel_averaged_all{k},1)-1)/2-1)*dt_all(k)*1000;
-    if k == 10
-        transient = nanmedian(([kernel_averaged_all{k}';kernel_averaged_all{k+1}';kernel_averaged_all{k+2}']));
-    else
-        transient = nanmedian(kernel_averaged_all{k}');
-    end
-    transient = transient - nanmean(transient(1:round(numel(transient)/2)));
-    peak = max(transient);
-    half_peak = peak / 2;
-    [~, peak_index] = max(transient);
-    decay_index = find(transient(peak_index:end) <= half_peak, 1, 'first') + peak_index - 1;
-    decay_times(k) = timeX(decay_index) - timeX(peak_index);
-end
-
-% Computing in a table
-variation_table = table(datasets(1:10)', peak_amplitudes', auc', decay_times', half_rise_times_all(1:10,1), ...
-    'VariableNames', {'Dataset', 'PeakAmplitude', 'AUC', 'DecayTime', 'HalfRiseTime'});
-
-disp(variation_table);
-
+% create a table with the results
+results_table = table(datasets', mean_amplitudes', median_amplitudes', snr', rise_times', decay_times', ...
+    'VariableNames', {'Dataset', 'MeanAmplitude', 'MedianAmplitude', 'SNR', 'RiseTime', 'DecayTime'});
