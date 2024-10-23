@@ -185,7 +185,7 @@ for folder_index = 1:numel(GT_folders)
 
     end
     
-    % Write the extracted kernels for each dataset into the pooling
+    % write the extracted kernels for each dataset into the pooling
     % variable "kernel_averaged_all"
     kernel_averaged_all{folder_index} = kernel_averaged;
 
@@ -217,8 +217,8 @@ for folder_index = 1:numel(GT_folders)
         % get the kernel for current neuron
         neuron_kernel = dataset_kernels(:, neuron_index);
         
-        % calculate baseline from the raw fluorescence trace
-        baseline = nanmean(CAttached{index}.fluo_mean(1:round(numel(CAttached{index}.fluo_mean)/4)));
+        % calculate baseline from kernels
+        baseline = nanmedian(neuron_kernel);
         baselines(neuron_index) = baseline; 
         
         % calculate amplitude

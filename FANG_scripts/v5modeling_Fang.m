@@ -1,4 +1,4 @@
-%% GD Modeling across GCaMP8 datasets_2
+%% GD Modeling across GCaMP8 datasets
 
 cd('Autocalibrated-spike-inference/GT_autocalibration')
 
@@ -11,7 +11,7 @@ datasets = {'GC8f','GC8m','GC8s'};
 
 
 % number of neurons to plot per dataset
-neurons_plot = 8;
+neurons_plot = 2;
 
 % plot for each folder
 for folder_index = 1:length(GT_folders)
@@ -22,7 +22,7 @@ for folder_index = 1:length(GT_folders)
     % find all GT neurons
     neuron_files = dir('CAttached*.mat');
     
-    % select 10 random neurons
+    % select random neurons
     num_neurons = min(neurons_plot, numel(neuron_files));
     neuron_indices = randperm(numel(neuron_files), num_neurons); 
     
@@ -218,24 +218,24 @@ results_table = table(datasets', mean_amplitudes', median_amplitudes', ...
     'VariableNames', {'Dataset', 'MeanAmplitude', 'MedianAmplitude'});
 
 
-
-
-
-% Gradient Descent Function
+%% Gradient Descent Function
 
 function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_error] ...
     = Gradient_Descent(time, ap_events, measured_trace)
     
-    % initial parameter values
+    % calculate drift
+    drift = movquant(measured_trace', 0.10, 4000, 1, 'omitnan', 'zeropad');
+    
+    % initial parameters
     amplitude = 1;
     tau_rise = 0.05;
     tau_decay = 0.5;
-    baseline = nanmedian(measured_trace);
+    %baseline = nanmedian(measured_trace);
 
     % Gradient Descent parameters
     learning_rate = 0.01;
-    max_iterations = 1000;  % maximum number of iterations
-    convergence_threshold = 1e-5;  % threshold for change in error
+    max_iterations = 2000;
+    convergence_threshold = 1e-6;
     
     % initialize variables for adaptive iterations
     prev_error = Inf;
@@ -245,26 +245,32 @@ function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_er
     while error_change > convergence_threshold && iteration < max_iterations
         iteration = iteration + 1;
         
+        % generate basic simulated trace (double exponential template)
         simulated_trace = zeros(size(time));
+
         for j = 1:length(ap_events)
             t_since_ap = time - ap_events(j);
             t_since_ap(t_since_ap < 0) = 1e12;
+
             simulated_trace = simulated_trace + amplitude * (exp(-t_since_ap / (tau_decay)) .* ...
                 (1 - exp(-t_since_ap / (tau_rise))));
         end
-        
+
         % add baseline fluctuation
-        baseline_fluctuation = baseline * (1 + 0.1 * sin(2 * pi * time / max(time)));
+        %baseline_fluctuation = baseline * (1 + 0.1 * sin(2 * pi * time / max(time)));
         %simulated_trace = simulated_trace + baseline_fluctuation;
 
         % add noise
-        noise_level = 0.1;
-        noise_std = noise_level * baseline;
-        sigma = noise_std * randn(size(simulated_trace));
+        %noise_level = 0.1;
+        %noise_std = noise_level * baseline;
+        %sigma = noise_std * randn(size(simulated_trace));
         %simulated_trace = simulated_trace + sigma;
 
+        % add drift to simulated trace
+        simulated_trace_with_drift = simulated_trace + drift';
+
         % compute error (MSE)
-        error = mean((measured_trace - simulated_trace).^2);
+        error = mean((measured_trace - simulated_trace_with_drift).^2);
 
         % calculate error change
         error_change = abs(prev_error - error);
@@ -279,13 +285,13 @@ function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_er
             t_since_ap = time - ap_events(j);
             t_since_ap(t_since_ap < 0) = 1e12;
             
-            grad_amplitude = grad_amplitude - 2 * mean((measured_trace - simulated_trace) .* ...
+            grad_amplitude = grad_amplitude - 2 * mean((measured_trace - simulated_trace_with_drift) .* ...
                 (exp(-t_since_ap / (tau_decay)) .* (1 - exp(-t_since_ap / (tau_rise)))));
             
-            grad_tau_rise = grad_tau_rise +  2 * amplitude * mean((measured_trace - simulated_trace) .* ...
+            grad_tau_rise = grad_tau_rise + 2 * amplitude * mean((measured_trace - simulated_trace_with_drift) .* ...
                 (t_since_ap / (tau_rise^2)) .* exp(-t_since_ap / (tau_rise)));
             
-            grad_tau_decay = grad_tau_decay - 2 * amplitude * mean((measured_trace - simulated_trace) .* ...
+            grad_tau_decay = grad_tau_decay - 2 * amplitude * mean((measured_trace - simulated_trace_with_drift) .* ...
                 (t_since_ap / (tau_decay^2)) .* exp(-t_since_ap / (tau_decay)));
         end
 
@@ -300,22 +306,14 @@ function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_er
         tau_decay = max(tau_decay, 0.01);
         
         % print progress every 100 iterations
-        if mod(iteration, 50) == 0
+        if mod(iteration, 100) == 0
             fprintf('Iteration %d: Error = %f, Change in Error = %f\n', iteration, error, error_change);
         end
     end
 
-        % drift
-        drift = movquant(measured_trace', 0.10, 4000, 1,'omitnan','zeropad');
-        simulated_trace_drift = simulated_trace' + drift;
-        simulated_trace = simulated_trace_drift';
-
-        % compute error (MSE)
-        error = mean((measured_trace - simulated_trace).^2);
-    
-
+    % final error and parameters
+    final_error = error;
     optimized_amplitude = amplitude;
     optimized_tau_rise = tau_rise;
     optimized_tau_decay = tau_decay;
-    final_error = error;
 end

@@ -1,7 +1,7 @@
-%% Modeling method GD
+%% Modeling method GD for a single neuron
 
 % load the data
-data = load('CAttached_jGCaMP8m_479570_5_mini.mat');
+data = load('CAttached_jGCaMP8s_472181_1_mini.mat');
 
 % access the CAttached field
 CAttached = data.CAttached;

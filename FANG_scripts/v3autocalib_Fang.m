@@ -61,6 +61,13 @@ for folder_index = 1:length(GT_folders)
 
         % load the data
         load(neuron_files(neuron_index).name);
+
+        amplitude_changes_neuron = [];
+        amplitudes_neuron = [];
+        baselines_neuron = [];
+        delta_f_f0_neuron = [];
+        median_amplitude_changes_neuron = [];
+    
         
         % loop through all recordings in the current neuron
         for recording_idx = 1:length(CAttached)
@@ -105,16 +112,24 @@ for folder_index = 1:length(GT_folders)
                     amplitudes_temp(k) = measured_trace(all_event_times(k));
                     delta_f_f0_temp(k) = (amplitudes_temp(k) - baseline) / baseline;
                 end
-            end
+            end 
 
-            % store results for this recording
-            dataset_median_amplitude_changes = [dataset_median_amplitude_changes; median(amplitude_changes_temp)];
-            dataset_amplitude_changes = [dataset_amplitude_changes; amplitude_changes_temp(:)];
-            dataset_amplitudes = [dataset_amplitudes; amplitudes_temp(:)];
-            dataset_baselines = [dataset_baselines; baseline];
-            dataset_delta_f_f0 = [dataset_delta_f_f0; delta_f_f0_temp(:)];
+            % store results for current recording
+            median_amplitude_changes_neuron = [median_amplitude_changes_neuron; amplitude_changes_temp(:)];
+            amplitude_changes_neuron = [amplitude_changes_neuron; amplitude_changes_temp(:)];
+            amplitudes_neuron = [amplitudes_neuron; amplitudes_temp(:)];
+            baselines_neuron = [baselines_neuron; baseline];
+            delta_f_f0_neuron = [delta_f_f0_neuron; delta_f_f0_temp(:)];
         end
+
+        % stroe results for current neuron
+        dataset_median_amplitude_changes = [dataset_median_amplitude_changes; median(median_amplitude_changes_neuron)];
+        dataset_amplitude_changes = [dataset_amplitude_changes; median(amplitude_changes_neuron)];
+        dataset_amplitudes = [dataset_amplitudes; median(amplitudes_neuron)];
+        dataset_baselines = [dataset_baselines; median(baselines_neuron)];
+        dataset_delta_f_f0 = [dataset_delta_f_f0; median(delta_f_f0_neuron)];
     end
+
     
     % store results for the current dataset
     median_amplitude_changes{folder_index} = dataset_median_amplitude_changes;
@@ -162,7 +177,7 @@ colors = {'k','k','k','c','c','m','r','b','g','k','k','k'};
 figure;
 hold on;
 for i = 1:numel(amplitudes)
-    amplitudes_to_plot = sort(amplitudes{i}(amplitudes{i} <= 5 & amplitudes{i} > 0)); 
+    amplitudes_to_plot = sort(amplitudes{i}); 
     plot(1:numel(amplitudes_to_plot), amplitudes_to_plot, 'DisplayName', datasets{i}, 'Color', colors{i});
 end
 hold off;
@@ -176,7 +191,7 @@ legend('show', 'Location', 'eastoutside');
 figure;
 hold on;
 for i = 1:numel(amplitudes)
-    histogram(amplitudes{i}(amplitudes{i} <= 5 & amplitudes{i} > 0), 'DisplayName', datasets{i}, 'BinWidth', 0.05,...
+    histogram(amplitudes{i}, 'DisplayName', datasets{i}, 'BinWidth', 0.05,...
         'Normalization', 'probability', 'FaceColor', colors{i}, 'FaceAlpha', 0.5);
 end
 hold off;
@@ -190,7 +205,7 @@ legend('show', 'Location', 'eastoutside');
 figure;
 hold on;
 for i = 1:numel(amplitudes)
-    amplitudes_to_plot = amplitudes{i}(amplitudes{i} <= 5 & amplitudes{i} > 0);
+    amplitudes_to_plot = amplitudes{i};
     boxplot(amplitudes_to_plot, 'positions', i, 'colors', colors{i}); 
 end
 hold off;
@@ -221,4 +236,3 @@ end
 % create a table with the results
 results_table = table(datasets', mean_amplitudes', median_amplitudes', snr', ...
     'VariableNames', {'Dataset', 'MeanAmplitude', 'MedianAmplitude', 'SNR'});
-
