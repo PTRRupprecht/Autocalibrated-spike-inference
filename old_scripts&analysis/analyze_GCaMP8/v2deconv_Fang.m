@@ -29,7 +29,6 @@ end
 dt0 = nanmedian(dtX);
 
 
-
 % Extract average spike-evoked kernels and deconv_amp
 
 % initialize arrays for analysis

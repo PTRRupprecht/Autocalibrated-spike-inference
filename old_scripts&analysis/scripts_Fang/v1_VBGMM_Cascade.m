@@ -1,4 +1,4 @@
-%% Improvement
+%% Optimization
 
 % try to improve inference with amplitude
 unitary_amplitude = 1.1416;
@@ -13,7 +13,7 @@ metric = nanmedian(corrected_spike_rate_per_event(detect_events)) - 1;
 %% Variational Bayesian GMM
 
 % load the dataset
-load('CAttached_jGCaMP8s_472182_7_mini')
+load('CAttached_jGCaMP8s_472182_6_mini')
 
 % threshold deconvolved trace --> threshold not optimized!
 event_detection = spike_rates_GC8 > 0.3;
@@ -44,43 +44,43 @@ end
 
 %figure, histogram(spike_rate_per_event, 100);
 %figure, histogram(spike_rate_per_event_GT, 100);
-[unitary_amp, model] = analyzeSpikesVBGMM(spike_rate_per_event);
+[unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate_per_event);
 
 
 %% Function
 
-function [unitary_amplitude, vbgmm_model] = analyzeSpikesVBGMM(spike_rate, options)
+function [unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate, options)
 
-    % default options based on prior knowledge
+    % default options based on our prior knowledge
     if ~exist('options', 'var')
         options = struct();
     end
     
-    options = setDefaultOptions(options);
+    options = SetDefault(options);
     
-    % set random seed for reproducibility
+    % random seed for reproducibility
     rng(2024);
     
     % load data and handle NaN
     X = spike_rate(~isnan(spike_rate));
     
     % initialize model with priors
-    [S, max_components] = initializeModel(X, options);
+    [F, max_components] = InitializeModel(X, options);
     
-    % fit model with multiple initializations
-    [best_model, best_ll] = fitModelWithReplicates(X, S, max_components, options);
+    % fit model with all initialization
+    [best_model, best_ll] = FitModel(X, F, max_components, options);
     
     % analyze results
-    [unitary_amplitude, vbgmm_model] = analyzeResults(best_model, X, options);
-    
-    % visualize results
-    visualizeResults(X, vbgmm_model, unitary_amplitude, options);
+    [unitary_amplitude, vb_gmm_model] = AnalyzeResult(best_model, X, options);
+
+    Visualization(X, vb_gmm_model, unitary_amplitude, options);
 end
 
-% Set defaults based on prior knowledge
-function options = setDefaultOptions(options)
+
+% set defaults based on priors
+function options = SetDefault(options)
     
-    % maximum number of spikes typically seen in one event
+    % maximum number of spikes typically can be seen in one event
     if ~isfield(options, 'max_spikes')
         options.max_spikes = 8;
     end
@@ -90,13 +90,13 @@ function options = setDefaultOptions(options)
         options.variance_scaling = 0.2; % Variance increases with mean
     end
     
-    % component weights (single spikes more common than doubles, doubles more than triples, etc.)
+    % component weights (single spikes more common than doubles, doubles more than triples...)
     if ~isfield(options, 'component_prior')
         options.component_prior = exp(-(0:7));
         options.component_prior = options.component_prior / sum(options.component_prior);
     end
     
-    % minimum weight for considering a component active
+    % minimum weight for a component
     if ~isfield(options, 'weight_threshold')
         options.weight_threshold = 0.09;
     end
@@ -108,57 +108,54 @@ function options = setDefaultOptions(options)
 
 end
 
-function [S, max_components] = initializeModel(X, options)
+
+function [F, max_components] = InitializeModel(X, options)
 
     % apply prior knowledge
     max_components = options.max_spikes;
     initial_unit = options.expected_unit_amp;
 
-    % use the median of the smallest 25% of positive events as initial estimate
+    % use the median of the smallest 25% of positive events as initial estimate (abandon after using priors)
     %initial_unit = median(X(X < prctile(X, 25)));
     
     % initialize means at integer multiples
-    S.mu = initial_unit * (1:max_components)';
+    F.mu = initial_unit * (1:max_components)';
     
-    % initialize covariances with specific scaling
-    S.Sigma = zeros(1,1,max_components);
+    % initialize covariances
+    F.Sigma = zeros(1,1,max_components);
+    
     for i = 1:max_components
 
         % variance increases with mean
-        S.Sigma(1,1,i) = (options.variance_scaling * S.mu(i))^2;
+        F.Sigma(1,1,i) = (options.variance_scaling * F.mu(i))^2;
     end
     
-    % initialize weights with prior knowledge
-    S.PComponents = options.component_prior(:);
+    % initialize weights with priors too
+    F.PComponents = options.component_prior(:);
 end
 
-function [best_model, best_ll] = fitModelWithReplicates(X, S, max_components, options)
+
+function [best_model, best_ll] = FitModel(X, F, max_components, options)
     n_replicates = 20;
     best_ll = inf;
     best_model = [];
     
+    % fit model
     for rep = 1:n_replicates
         try
-            % add small random perturbations to means
-            curr_S = S;
-            %curr_S.mu = S.mu .* (1 + 0.1*randn(size(S.mu)));
-            
-            % constrain means to be positive and ordered
-            curr_S.mu = sort(max(curr_S.mu, 0));
-            
-            % fit model with constraints
             model = fitgmdist(X, max_components, ...
                 'CovarianceType', 'diagonal', ...
                 'RegularizationValue', 1e-6, ...
                 'Options', statset('MaxIter', 1000, 'TolFun', 1e-6), ...
-                'Start', curr_S);
+                'Start', F);
             
             if model.NegativeLogLikelihood < best_ll
                 best_ll = model.NegativeLogLikelihood;
                 best_model = model;
             end
-        catch ME
-            fprintf('Warning: Iteration %d failed: %s\n', rep, ME.message);
+
+        catch ER
+            fprintf('Warning: Iteration %d failed: %s\n', rep, ER.message);
             continue;
         end
     end
@@ -168,28 +165,29 @@ function [best_model, best_ll] = fitModelWithReplicates(X, S, max_components, op
     end
 end
 
-function [unitary_amplitude, vbgmm_model] = analyzeResults(model, X, options)
 
-    % get component parameters
+function [unitary_amplitude, vb_gmm_model] = AnalyzeResult(model, X, options)
+
+    % component parameters
     weights = model.PComponents;
     means = model.mu;
     
-    % find active components
-    active_idx = weights > options.weight_threshold;
-    active_means = means(active_idx);
-    active_weights = weights(active_idx);
+    % filter components
+    good_idx = weights > options.weight_threshold;
+    good_means = means(good_idx);
+    good_weights = weights(good_idx);
     
     % sort components by mean
-    [sorted_means, sort_idx] = sort(active_means);
-    sorted_weights = active_weights(sort_idx);
+    [sorted_means, sort_idx] = sort(good_means);
+    sorted_weights = good_weights(sort_idx);
     
     % first component mean as unitary amplitude estimate
     unitary_amplitude = sorted_means(1);
-    vbgmm_model = model;
+    vb_gmm_model = model;
     
-    % Print analysis
+    % print analysis
     fprintf('\nVB-GMM Analysis Results:\n');
-    fprintf('Number of effective components: %d\n', sum(active_idx));
+    fprintf('Number of effective components: %d\n', sum(good_idx));
     fprintf('Unitary amplitude estimate: %.3f\n', unitary_amplitude);
     
     fprintf('\nComponent analysis:\n');
@@ -198,36 +196,34 @@ function [unitary_amplitude, vbgmm_model] = analyzeResults(model, X, options)
         actual = sorted_means(i)/unitary_amplitude;
         error = abs(actual - expected)/expected * 100;
         fprintf(['Component %d: Mean=%.3f, Weight=%.3f\n' ...
-                '   Expected ratio=%.1f, Actual ratio=%.2f (error=%.1f%%)\n'], ...
-            i, sorted_means(i), sorted_weights(i), expected, actual, error);
+                '   Expected ratio=%.1f, Actual ratio=%.2f (error=%.1f%%)\n'],i, ...
+                sorted_means(i), sorted_weights(i), expected, actual, error);
     end
 end
 
-function visualizeResults(X, model, unitary_amplitude, options)
 
-    % create figure
+function Visualization(X, model, unitary_amplitude, options)
+
     figure('Position', [100, 100, 1200, 800]);
     
-    % Plot 1: Data and fitted components
+    % plot 1: data and fitted components
     subplot(2,1,1);
-    
-    % plot histogram of positive values only
     X_plot = X(X > 0);
     histogram(X_plot, 50, 'Normalization', 'pdf', 'FaceAlpha', 0.3);
     hold on;
     
-    % generate points for plotting the GMM
+    % generate points of plotting
     x = linspace(min(X_plot), max(X_plot), 200);
     y_total = zeros(size(x));
     
-    % get active components
+    % get components
     weights = model.PComponents;
     means = model.mu;
     sigmas = sqrt(squeeze(model.Sigma));
-    active_idx = weights > options.weight_threshold;
+    good_idx = weights > options.weight_threshold;
     
     % plot components
-    cmap = lines(sum(active_idx));
+    cmap = lines(sum(good_idx));
     component_idx = 1;
     
     for i = 1:length(weights)
@@ -243,22 +239,21 @@ function visualizeResults(X, model, unitary_amplitude, options)
     
     % plot sum of components
     plot(x, y_total, 'k--', 'LineWidth', 2, 'DisplayName', 'Sum of Components');
-    
     title('Spike Rate Distribution (VB-GMM Fit)');
     xlabel('Spike Rate');
     ylabel('Probability Density');
     legend('show', 'Location', 'best');
     grid on;
     
-    % Plot 2: Component analysis
+    % plot 2: component analysis
     subplot(2,1,2);
     
-    % get sorted active components
-    active_means = means(active_idx);
-    [sorted_means, sort_idx] = sort(active_means);
+    % get sorted good components
+    good_means = means(good_idx);
+    [sorted_means, sort_idx] = sort(good_means);
     
     % bar plot of component means
-    bar(sorted_means, 'FaceColor', [0.8 0.8 0.8]);
+    bar(sorted_means, 'FaceColor', [0.4 0.6 0.8]);
     hold on;
     
     % plot expected integer multiples
