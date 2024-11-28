@@ -1,11 +1,11 @@
-%% Deconvolution for a single dataset
+%% Deconvolution for datasets
 
 
 cd('Autocalibrated-spike-inference/GT_autocalibration')
 
 
 % set up the dataset to be analyzed
-dataset_folder = 'DS32-GCaMP8s-m-V1';
+dataset_folder = 'DS30-GCaMP8f-m-V1';
 dataset_name = 'GCaMP8s';
 
 cd(dataset_folder)

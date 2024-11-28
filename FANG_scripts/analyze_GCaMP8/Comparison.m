@@ -1,7 +1,7 @@
 %% Compare amplitudes between two methods
 
-%modeling_amp = per_recording_amplitudes;
-%deconv_amp = neuron_deconv_amp';
+modeling_amp = per_recording_amplitudes;
+%deconv_amp = per_recording_amplitudes;
 plot_amplitude_comparison(modeling_amp, deconv_amp, 3);
 
 

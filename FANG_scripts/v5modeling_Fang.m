@@ -1,225 +1,112 @@
-%% GD Modeling across GCaMP8 datasets
-
-cd('Autocalibrated-spike-inference/GT_autocalibration')
-
-
-% list of folders
-GT_folders = {'DS30-GCaMP8f-m-V1', 'DS31-GCaMP8m-m-V1', 'DS32-GCaMP8s-m-V1'};
-
-
-datasets = {'GC8f','GC8m','GC8s'};
-
-
-% number of neurons to plot per dataset
-neurons_plot = 2;
-
-% plot for each folder
-for folder_index = 1:length(GT_folders)
-    folder_name = GT_folders{folder_index};
-    dataset_name = datasets{folder_index};
-    cd(GT_folders{folder_index})
-    
-    % find all GT neurons
-    neuron_files = dir('CAttached*.mat');
-    
-    % select random neurons
-    num_neurons = min(neurons_plot, numel(neuron_files));
-    neuron_indices = randperm(numel(neuron_files), num_neurons); 
-    
-    % create a figure with subplots for the selected neurons
-    subplot_rows = ceil(sqrt(num_neurons));
-    subplot_cols = ceil(num_neurons / subplot_rows);
-    figure('Name', sprintf('Calcium Traces - %s', dataset_name), 'Position', [100, 100, 1200, 800]);
-    
-    for i = 1:num_neurons
-        neuron_index = neuron_indices(i); 
-        load(neuron_files(neuron_index).name);
-        
-        % select a random recording for each neuron
-        recording_index = randi(numel(CAttached));
-        
-        % extract data
-        fluo_time = CAttached{recording_index}.fluo_time;
-        fluo_trace = CAttached{recording_index}.fluo_mean;
-        AP_times = CAttached{recording_index}.events_AP / 1e4;
-    
-        % generate simulated trace
-        [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, ~] = ...
-            Gradient_Descent(fluo_time, AP_times, fluo_trace);
-        
-        simulated_trace = zeros(size(fluo_time));
-        for j = 1:length(AP_times)
-            t_since_ap = fluo_time - AP_times(j);
-            t_since_ap(t_since_ap < 0) = 1e12;
-            simulated_trace = simulated_trace + optimized_amplitude * ...
-                (exp(-t_since_ap / optimized_tau_decay) .* (1 - exp(-t_since_ap / optimized_tau_rise)));
-        end
-        
-        % plot results in subplot
-        subplot(subplot_rows, subplot_cols, i);
-        plot(fluo_time, fluo_trace, 'b', fluo_time, simulated_trace, 'r');
-        title(sprintf('Neuron %d', neuron_index)); 
-        %if i == num_neurons  % only add legend to the last subplot
-        legend('Measured', 'Simulated', 'Location', 'southoutside');
-        
-        xlabel('Time (s)');
-        ylabel('Fluorescence');
-    end
-    
-    % title for the figure
-    sgtitle(sprintf('Calcium Traces - %s', dataset_name));
-    
-    cd ..
-end
-
-
-%% Amplitude Extraction and Visualization
+%% Modeling for a single neuron
 
 
 cd('Autocalibrated-spike-inference/GT_autocalibration')
 
+% set up the data set to be analyzed
+dataset_folder = 'DS32-GCaMP8s-m-V1';
+dataset_name = 'GCaMP8s';
 
-% list of folders
-GT_folders = {'DS30-GCaMP8f-m-V1', 'DS31-GCaMP8m-m-V1', 'DS32-GCaMP8s-m-V1'};
+cd(dataset_folder)
 
+% find all GT neurons
+neuron_files = dir('CAttached*.mat');
+num_neurons = numel(neuron_files);
 
-datasets = {'GC8f','GC8m','GC8s'};
-colors = {'r' 'b' 'g'};
+% choose one neuron to analyze
+selected_neuron = 10;
 
+% create a figure
+figure('Name', sprintf('GCaMP8s Neuron %d Analysis', selected_neuron), 'Position', [100, 100, 1200, 800]);
 
-% initialize a cell array to store amplitudes for each dataset
-all_amplitudes = cell(length(GT_folders), 1);
+% load neuron data
+load(neuron_files(selected_neuron).name);
 
+% initialize arrays to store results
+recording_amplitudes = [];
+all_traces = {};
+all_simulated = {};
 
-% parallel processing
-%{
-parfor folder_index = 1:length(GT_folders)
-    folder_name = GT_folders{folder_index};
-    dataset_name = datasets{folder_index};
-%}
+% process all recordings for this neuron
+num_recordings = numel(CAttached);
 
-for folder_index = 1:length(GT_folders)
-    folder_name = GT_folders{folder_index};
-    dataset_name = datasets{folder_index};
-    cd(GT_folders{folder_index})
+% create subplots based on number of recordings
+num_rows = ceil(sqrt(num_recordings));
+num_cols = ceil(num_recordings/num_rows);
+
+for recording_idx = 1:num_recordings
+    fprintf('Processing recording %d of %d\n', recording_idx, num_recordings);
+
+    % extract data
+    fluo_time = CAttached{recording_idx}.fluo_time;
+    fluo_trace = CAttached{recording_idx}.fluo_mean;
+    AP_times = CAttached{recording_idx}.events_AP / 1e4;
     
-    % Find all GT neurons
-    neuron_files = dir('CAttached*.mat');
+    % generate simulated trace and extract parameters
+    [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_error] = ...
+        Gradient_Descent(fluo_time, AP_times, fluo_trace);
     
-    % Initialize array to store amplitudes for this dataset
-    dataset_amplitudes = [];
-
-    for neuron_index = 1:numel(neuron_files)
-        data = load(fullfile(folder_name, neuron_files(neuron_index).name));
-
-        % process all recordings for this neuron
-        for recording_index = 1:numel(data.CAttached)
-
-            % extract data
-            fluo_time = data.CAttached{recording_index}.fluo_time;
-            fluo_trace = data.CAttached{recording_index}.fluo_mean;
-            AP_times = data.CAttached{recording_index}.events_AP / 1e4;
-
-            %{
-            % adjust vectors
-            if size(fluo_time, 2) > 1
-                fluo_time = fluo_time';
-            end
-
-            if size(fluo_trace, 2) > 1
-                fluo_trace = fluo_trace';
-            end
-            
-            % remove NaN values
-            good_indices = ~isnan(fluo_time) & ~isnan(fluo_trace);
-            fluo_time = fluo_time(good_indices);
-            fluo_trace = fluo_trace(good_indices);
-            %}
-            
-            % generate simulated trace and extract amplitude
-            [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, ~] = ...
-                Gradient_Descent(fluo_time, AP_times, fluo_trace);
-
-            % Store the amplitude
-            dataset_amplitudes = [dataset_amplitudes; optimized_amplitude];
-        end
+    % store the amplitude for this recording
+    recording_amplitudes = [recording_amplitudes; optimized_amplitude];
+    
+    % generate simulated trace for plotting
+    simulated_trace = zeros(size(fluo_time));
+    
+    for j = 1:length(AP_times)
+        t_since_ap = fluo_time - AP_times(j);
+        t_since_ap(t_since_ap < 0) = 1e12;
+        
+        simulated_trace = simulated_trace + optimized_amplitude * ...
+            (exp(-t_since_ap / optimized_tau_decay) .* (1 - exp(-t_since_ap / optimized_tau_rise)));
     end
     
-    % Store amplitudes for this dataset
-    all_amplitudes{folder_index} = dataset_amplitudes;
+    % store traces for later use
+    all_traces{recording_idx} = fluo_trace;
+    all_simulated{recording_idx} = simulated_trace;
     
-    cd ..
+    % plot each recording
+    subplot(num_rows, num_cols, recording_idx);
+    plot(fluo_time, fluo_trace, 'b', fluo_time, simulated_trace, 'r');
+    title(sprintf('Recording %d (A: %.2f)', recording_idx, optimized_amplitude));
+    xlabel('Time (s)');
+    ylabel('Fluorescence');
+    if recording_idx == 1  % Only show legend for first subplot to save space
+        legend('Measured', 'Simulated', 'Location', 'best');
+    end
 end
 
+% add overall title
+sgtitle(sprintf('Neuron %d - All Recordings Analysis', selected_neuron));
 
-
-% Visualization
-% Line graph
-figure;
-hold on;
-for i = 1:numel(all_amplitudes)
-    amplitudes_to_plot = sort(all_amplitudes{i}(all_amplitudes{i} <= 5)); 
-    plot(1:numel(amplitudes_to_plot), amplitudes_to_plot, 'DisplayName', datasets{i}, 'Color', colors{i});
-end
-hold off;
-title('Neuron Amplitudes Across Datasets');
-xlabel('Neuron Index');
-ylabel('Amplitude (dF/F)');
-legend('show', 'Location', 'eastoutside');
-
+% create a new figure for amplitude analysis
+figure('Name', sprintf('GCaMP8s Neuron %d Amplitude Analysis', selected_neuron));
 
 % Histogram
-figure;
-hold on;
-for i = 1:numel(all_amplitudes)
-    histogram(all_amplitudes{i}(all_amplitudes{i} < 5), 'DisplayName', datasets{i}, 'BinWidth', 0.05,...
-        'Normalization', 'probability', 'FaceColor', colors{i});
-end
-hold off;
-title('Distribution of Neuron Amplitudes');
+subplot(2,1,1);
+histogram(recording_amplitudes, 'BinWidth', 0.05, ...
+    'Normalization', 'probability', 'FaceColor', 'g');
+title(sprintf('Distribution of Amplitudes for Neuron %d', selected_neuron));
 xlabel('Amplitude (dF/F)');
 ylabel('Probability');
-legend('show', 'Location', 'eastoutside');
-
 
 % Box plot
-figure;
-hold on;
-for i = 1:numel(all_amplitudes)
-    amplitudes_to_plot = all_amplitudes{i}(all_amplitudes{i} <= 5);
-    boxplot(amplitudes_to_plot, 'positions', i, 'colors', colors{i}); 
-end
-hold off;
-set(gca, 'xtick', 1:numel(datasets), 'xticklabel', datasets);
-xtickangle(45);
+subplot(2,1,2);
+boxplot(recording_amplitudes);
+title(sprintf('Amplitude Box Plot for Neuron %d', selected_neuron));
+ylabel('Amplitude (dF/F)');
+
+% Calculate and display statistics
+mean_amplitude = mean(recording_amplitudes);
+median_amplitude = median(recording_amplitudes);
+std_amplitude = std(recording_amplitudes);
+
+fprintf('\nResults for Neuron %d:\n', selected_neuron);
+fprintf('Mean Amplitude: %.2f\n', mean_amplitude);
+fprintf('Median Amplitude: %.2f\n', median_amplitude);
+fprintf('Standard Deviation: %.2f\n', std_amplitude);
 
 
-
-
-% Find optimal amplitudes for each calcium indicator
-
-% initialize arrays to store relevant metrics
-mean_amplitudes = zeros(1, numel(GT_folders));
-median_amplitudes = zeros(1, numel(GT_folders));
-
-
-% calculate metrics for each dataset
-for folder_index = 1:numel(GT_folders)
-    amplitudes = all_amplitudes{folder_index};
-
-    mean_amplitudes(folder_index) = mean(amplitudes);
-    median_amplitudes(folder_index) = median(amplitudes);
-    
-end
-    
-
-% create a table with the results
-results_table = table(datasets', mean_amplitudes', median_amplitudes', ...
-    'VariableNames', {'Dataset', 'MeanAmplitude', 'MedianAmplitude'});
-
-
-%% Gradient Descent Function
-
+%% Gradient Descent Function remains the same as in original script
 function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_error] ...
     = Gradient_Descent(time, ap_events, measured_trace)
     
@@ -230,7 +117,6 @@ function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_er
     amplitude = 1;
     tau_rise = 0.05;
     tau_decay = 0.5;
-    %baseline = nanmedian(measured_trace);
 
     % Gradient Descent parameters
     learning_rate = 0.01;
@@ -255,16 +141,6 @@ function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_er
             simulated_trace = simulated_trace + amplitude * (exp(-t_since_ap / (tau_decay)) .* ...
                 (1 - exp(-t_since_ap / (tau_rise))));
         end
-
-        % add baseline fluctuation
-        %baseline_fluctuation = baseline * (1 + 0.1 * sin(2 * pi * time / max(time)));
-        %simulated_trace = simulated_trace + baseline_fluctuation;
-
-        % add noise
-        %noise_level = 0.1;
-        %noise_std = noise_level * baseline;
-        %sigma = noise_std * randn(size(simulated_trace));
-        %simulated_trace = simulated_trace + sigma;
 
         % add drift to simulated trace
         simulated_trace_with_drift = simulated_trace + drift';
@@ -316,4 +192,6 @@ function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_er
     optimized_amplitude = amplitude;
     optimized_tau_rise = tau_rise;
     optimized_tau_decay = tau_decay;
+    
 end
+

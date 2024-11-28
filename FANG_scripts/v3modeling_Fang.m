@@ -1,4 +1,4 @@
-%% Modeling method GD for a single neuron
+%% Modeling method GD
 
 % load the data
 data = load('CAttached_jGCaMP8s_472181_1_mini.mat');
