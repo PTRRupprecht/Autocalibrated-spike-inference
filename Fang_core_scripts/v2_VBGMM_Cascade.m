@@ -101,7 +101,7 @@ for file_idx = 1:length(neuron_files)
 end
 
 
-% Visualization and Statistical Analysis
+%% Visualization and Statistical Analysis
 
 figure('Position', [100, 100, 1000, 1000]);
 
@@ -147,6 +147,7 @@ ylabel('Number of Neurons');
 grid on;
 
 
+% stats
 % print analysis summary
 fprintf('\n$$$ Analysis Summary for %s $$$\n', dataset_name);
 fprintf('Total number of neurons analyzed: %d\n', length(neuron_files));
@@ -178,6 +179,7 @@ fprintf('Poor result neurons (error ≥ 0.1): %d (%.1f%%)\n', ...
     length(neuron.poor),100 * length(neuron.poor)/sum(~isnan(all_raw_metrics)));
 
 
+
 %% Function
 
 function [unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate, options)
@@ -188,9 +190,6 @@ function [unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate, opti
     end
     
     options = SetDefault(options);
-    
-    % random seed for reproducibility
-    rng(2024);
     
     % load data and handle NaN
     X = spike_rate(~isnan(spike_rate));

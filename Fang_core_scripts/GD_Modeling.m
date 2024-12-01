@@ -5,8 +5,8 @@ cd('Autocalibrated-spike-inference/GT_autocalibration')
 
 
 % preparations
-dataset_folder = 'DS32-GCaMP8s-m-V1';
-dataset_name = 'GCaMP8s';
+dataset_folder = 'DS31-GCaMP8m-m-V1';
+dataset_name = 'GCaMP8m';
 cd(dataset_folder)
 
 neuron_files = dir('CAttached*.mat');
