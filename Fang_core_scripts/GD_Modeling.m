@@ -16,22 +16,22 @@ modeling_amp = [];
 neuron_amplitudes = [];
 
 % randomly select two neurons to plot
-selected_neurons = randperm(num_neurons, 2);
+selected_neurons = randperm(num_neurons, 2); %change if u wanna more plots
 
-figure('Name', 'GCaMP8s Selected Neuron Traces', 'Position', [100, 100, 1200, 400]);
+figure('Name','GCaMP8 Selected Neuron Traces', 'Position', [100, 100, 1000, 1000]);
 
 % process each neuron
 for neuron_idx = 1:num_neurons
+
     fprintf('Processing neuron %d of %d\n', neuron_idx, num_neurons);
+
     load(neuron_files(neuron_idx).name);
-    
-    % process all recordings for this neuron
+
     num_recordings = numel(CAttached);
-    recording_amplitudes = []; % temporary storage for all recordings
     
-    % choose a random recording from elected neurons
-    is_selected = find(selected_neurons == neuron_idx);
-    if ~isempty(is_selected)
+    % choose a random recording from selected neurons
+    selected = find(selected_neurons == neuron_idx);
+    if ~isempty(selected)
         plot_recording_idx = randi(num_recordings);
     end
     
@@ -48,12 +48,11 @@ for neuron_idx = 1:num_neurons
         [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_error] = ...
             Gradient_Descent(fluo_time, AP_times, fluo_trace);
         
-        % store amplitudes
-        recording_amplitudes = [recording_amplitudes; optimized_amplitude];
+        % store all amplitudes from each recording as our modeling amplitudes
         modeling_amp = [modeling_amp; optimized_amplitude];
         
         % plot only the selected random neuron and recording
-        if ~isempty(is_selected) && recording_idx == plot_recording_idx
+        if ~isempty(selected) && recording_idx == plot_recording_idx
 
             % generate simulated trace for plotting
             simulated_trace = zeros(size(fluo_time));
@@ -66,23 +65,24 @@ for neuron_idx = 1:num_neurons
                     (exp(-t_since_ap / optimized_tau_decay) .* (1 - exp(-t_since_ap / optimized_tau_rise)));
             end
             
-            subplot(1, 2, is_selected);
+            subplot(1, 2, selected);
             plot(fluo_time, fluo_trace, 'b', fluo_time, simulated_trace, 'r');
-            title(sprintf('Neuron %d Recording %d Ampl: %.2f', neuron_idx, plot_recording_idx, median(neuron_amplitudes)));
+            title(sprintf('Neuron %d Recording %d Amp: %.2f', neuron_idx, plot_recording_idx, modeling_amp(plot_recording_idx)));
             xlabel('Time (s)');
             ylabel('Fluorescence');
-            legend('Measured', 'Simulated', 'Location', 'best');
+            legend('Measured', 'Simulated','Location', 'best');
 
         end
     end
 
-    % store median amplitude for the neuron
-    neuron_median_amplitude = median(recording_amplitudes);
+    % store also median amplitude of each neuron
+    neuron_median_amplitude = median(modeling_amp);
     neuron_amplitudes = [neuron_amplitudes; neuron_median_amplitude];
 
 end
 
 sgtitle('Measured vs Simulated Calcium Trace - Two Random Examples');
+
 
 
 %% Visualization of amplitudes
@@ -125,7 +125,7 @@ function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_er
     drift = movquant(measured_trace', 0.10, 4000, 1, 'omitnan', 'zeropad');
     
     % initial parameters
-    amplitude = 1;
+    amplitude = 1.68;
     tau_rise = 0.05;
     tau_decay = 0.5;
     %baseline = nanmedian(measured_trace);

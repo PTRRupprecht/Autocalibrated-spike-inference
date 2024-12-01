@@ -101,7 +101,7 @@ for file_idx = 1:length(neuron_files)
 end
 
 
-%% Visualization and Statistical Analysis
+% Visualization and Statistical Analysis
 
 figure('Position', [100, 100, 1000, 1000]);
 
@@ -234,7 +234,7 @@ function options = SetDefault(options)
 
     % priors combine gradient descent modeling and deconvolution
     if ~isfield(options, 'expected_unit_amp')
-        options.expected_unit_amp = 1.3013;
+        options.expected_unit_amp = 1.3013; % 1.7399 for 8s, 1.3013 for 8m
     end
 
 end
