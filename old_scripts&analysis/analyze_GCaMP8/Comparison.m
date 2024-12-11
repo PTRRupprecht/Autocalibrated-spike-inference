@@ -1,8 +1,10 @@
 %% Compare amplitudes between two methods
 
+original_indices = 1:39;
+new_indices = linspace(1, 39, 42);
+x_interpolated = interp1(original_indices, all_unitary_amplitudes, new_indices);
 
-amplitudes_comparison(modeling_amp, deconv_amp, 3);
-
+amplitudes_comparison(x_interpolated, neuron_deconv_amp, 3);
 
 
 function amplitudes_comparison(modeling_amplitudes, deconv_amplitudes, threshold)

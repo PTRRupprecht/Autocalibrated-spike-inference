@@ -1,10 +1,10 @@
-%% Modeling method GD
+%% Modeling for a single neuron
+
 
 % load the data
 data = load('CAttached_jGCaMP8s_472181_1_mini.mat');
-
-% access the CAttached field
 CAttached = data.CAttached;
+
 
 % plot each cell in a separate subplot
 nRows = ceil(length(CAttached) / 2);
@@ -20,8 +20,6 @@ for i = 1:length(CAttached)
     % determine dt
     time = cell_data.fluo_time;
     dt = nanmedian(diff(time));
-    
-    % extract AP events for the current cell
     ap_events = cell_data.events_AP / 1e4;
 
     % define parameters (optimize later)
@@ -90,7 +88,7 @@ for i = 1:length(CAttached)
     measured_trace = cell_data.fluo_mean;
 
     % initial parameter values
-    amplitude = 1;
+    amplitude = 1.68;
     tau_rise = 0.05;
     tau_decay = 0.5;
     baseline = nanmedian(measured_trace);
@@ -195,8 +193,7 @@ for i = 1:length(CAttached)
 end
 
 
-%% Compare the improvement
-
+% Compare the improvement
 
 error_table = table((1:length(CAttached))', error_bef', error_aft', ...
     'VariableNames', {'Recording', 'MSE_Before', 'MSE_After'});

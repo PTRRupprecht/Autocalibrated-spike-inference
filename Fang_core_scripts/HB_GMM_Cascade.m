@@ -1,5 +1,4 @@
-%% Apply VB-GMM for GCaMP8
-
+%% Apply (Hybrid)HB-GMM for GCaMP8
 
 % preparations
 cd('CASCADE/Results_for_autocalibration')
@@ -9,16 +8,15 @@ cd(dataset_folder)
 neuron_files = dir('CAttached*.mat');
 
 % initialize arrays
-all_metrics = [];
+all_raw_metrics_log = [];
+all_raw_metrics_additive = [];
+all_optimized_metrics_log = [];
+all_optimized_metrics_additive = [];
+
 all_unitary_amplitudes = [];
 all_component_counts = [];
 all_component_weights = {};
 all_component_means = {};
-
-all_raw_metrics = [];
-all_optimized_metrics = [];
-all_improvement_ratios = [];
-neuron = struct('good', [], 'moderate', [], 'poor', []);
 
 
 for file_idx = 1:length(neuron_files)
@@ -50,9 +48,9 @@ for file_idx = 1:length(neuron_files)
     end
 
 
-    % VBGMM fitting
+    % HBGMM fitting
     try
-        [unitary_amplitude, model] = AnalyzeSpikesVBGMM(spike_rate_per_event);
+        [unitary_amplitude, model] = AnalyzeSpikesHBGMM(spike_rate_per_event);
         all_unitary_amplitudes(file_idx) = unitary_amplitude;
         
         % store component info
@@ -69,30 +67,31 @@ for file_idx = 1:length(neuron_files)
 
         % calculate metrics
         if sum(detect_events) > 0
-            raw_metric = nanmedian(spike_rate_per_event(detect_events)) - 1;
-            optimized_metric = nanmedian(optimized_spike_rate(detect_events)) - 1;
-            
-            all_raw_metrics(file_idx) = raw_metric;
-            all_optimized_metrics(file_idx) = optimized_metric;
-            all_improvement_ratios(file_idx) = abs(optimized_metric)/abs(raw_metric);
-            
-            % classify neuron based on requirements
-            if abs(optimized_metric) < 0.05
-                neuron.good = [neuron.good, file_idx];
-            elseif abs(optimized_metric) < 0.1
-                neuron.moderate = [neuron.moderate, file_idx];
-            else
-                neuron.poor = [neuron.poor, file_idx];
-            end
 
+            % additive metrics (absolute deviations)
+            raw_metric_additive = nanmedian(spike_rate_per_event(detect_events)) - 1;
+            optimized_metric_additive = nanmedian(optimized_spike_rate(detect_events)) - 1;
+    
+            % logarithmic metrics (relative scale of errors)
+            raw_metric_log = nanmedian(log(spike_rate_per_event(detect_events)));
+            optimized_metric_log = nanmedian(log(optimized_spike_rate(detect_events)));
+    
+            % Store both sets of metrics
+            all_raw_metrics_additive(file_idx) = raw_metric_additive;
+            all_optimized_metrics_additive(file_idx) = optimized_metric_additive;
+            all_raw_metrics_log(file_idx) = raw_metric_log;
+            all_optimized_metrics_log(file_idx) = optimized_metric_log;
+            
         end
 
     catch ER
         fprintf('Warning: Analysis failed for file %d: %s\n', file_idx, ER.message);
+        
+        all_raw_metrics_log(file_idx) = NaN;
+        all_raw_metrics_additive(file_idx) = NaN;
+        all_optimized_metrics_log(file_idx) = NaN;
+        all_optimized_metrics_additive(file_idx) = NaN;
         all_unitary_amplitudes(file_idx) = NaN;
-        all_raw_metrics(file_idx) = NaN;
-        all_optimized_metrics(file_idx) = NaN;
-        all_improvement_ratios(file_idx) = NaN;
         all_component_counts(file_idx) = NaN;
         all_component_weights{file_idx} = NaN;
         all_component_means{file_idx} = NaN;
@@ -101,50 +100,70 @@ for file_idx = 1:length(neuron_files)
 end
 
 
-%% Visualization and Statistical Analysis
-
+% Visualization and Statistical Analysis
 figure('Position', [100, 100, 1000, 1000]);
 
-% plot 1: distribution of unitary amplitudes
+
+% plot 1 & 2: additive and log metrics comparison
 subplot(2,2,1);
-histogram(all_unitary_amplitudes, 'Normalization', 'probability', 'FaceColor', [0.4 0.6 0.8]);
-title(sprintf('Distribution of Unitary Amplitudes (%s)', dataset_name));
-xlabel('Unitary Amplitude');
-ylabel('Probability');
+boxplot([all_raw_metrics_additive', all_optimized_metrics_additive'], ...
+    'Labels', {'Raw', 'Optimized'}, 'Notch', 'on');
+title('Additive Metrics: Raw vs Optimized');
+ylabel('Additive Error');
 grid on;
 
-% add mean and median lines
-hold on;
-mean_amplitudes = mean(all_unitary_amplitudes, 'omitnan');
-median_amplitudes = median(all_unitary_amplitudes, 'omitnan');
-ylims = ylim;
-plot([mean_amplitudes mean_amplitudes], ylims, 'r--', 'LineWidth', 1);
-plot([median_amplitudes median_amplitudes], ylims, 'g--', 'LineWidth', 1);
-legend({'Distribution', 'Mean', 'Median'});
 
-% plot 2: raw and optimized metrics
+% plot 2
 subplot(2,2,2);
-boxplot([all_raw_metrics', all_optimized_metrics'],'Labels', {'Raw', 'Optimized'},'Notch', 'on');
-title('Raw vs Optimized Metrics');
-ylabel('Error Calculated from Ground Truth');
+boxplot([all_raw_metrics_log', all_optimized_metrics_log'], ...
+    'Labels', {'Raw', 'Optimized'}, 'Notch', 'on');
+title('Logarithmic Metrics: Raw vs Optimized');
+ylabel('Logarithmic Error');
 grid on;
 
-% plot 3: optimization distribution
+
+
+% plot 3 & 4: scatter of metrics
 subplot(2,2,3);
-histogram(all_improvement_ratios, 10, 'FaceColor', [0.4 0.6 0.8]);
-title('Distribution of Optimization Ratios');
-xlabel('Optimization Ratio');
-ylabel('Count');
+scatter(all_raw_metrics_additive, all_optimized_metrics_additive, 'filled', 'MarkerFaceAlpha', 0.5);
+hold on;
+xlabel('Raw Additive Error');
+ylabel('Optimized Additive Error');
 grid on;
+title('Additive Error Comparison')
+% add lines and shadow
+hold on;
+min_value = min(min(all_raw_metrics_additive), min(all_optimized_metrics_additive));
+max_value = max(max(all_raw_metrics_additive), max(all_optimized_metrics_additive));
+abs_max = max(abs([min_value, max_value]));
+plot([-abs_max, abs_max], [-abs_max, abs_max], 'r--', 'LineWidth', 1);
+plot([-abs_max, abs_max], [abs_max, -abs_max], 'r--', 'LineWidth', 1);
+x = linspace(-abs_max, abs_max, 100);
+y1 = x;
+y2 = -x;
+fill([x fliplr(x)], [y1 fliplr(y2)], 'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none');
+hold off;
 
-% plot 4: distribution of all neurons
+
+% plot 4
 subplot(2,2,4);
-result_counts = [length(neuron.good),length(neuron.moderate),length(neuron.poor)];
-b = bar(result_counts, 'FaceColor', [0.4 0.6 0.8]);
-title('Neuron Result Distribution');
-xticklabels({'Good', 'Moderate', 'Poor'});
-ylabel('Number of Neurons');
+scatter(all_raw_metrics_log, all_optimized_metrics_log, 'filled', 'MarkerFaceAlpha', 0.5);
+hold on;
+xlabel('Raw Logarithmic Error');
+ylabel('Optimized Logarithmic Error');
 grid on;
+title('Logarithmic Error Comparison');
+hold on;
+min_value = min(min(all_raw_metrics_log), min(all_optimized_metrics_log));
+max_value = max(max(all_raw_metrics_log), max(all_optimized_metrics_log));
+abs_max = max(abs([min_value, max_value]));
+plot([-abs_max, abs_max], [-abs_max, abs_max], 'r--', 'LineWidth', 1);
+plot([-abs_max, abs_max], [abs_max, -abs_max], 'r--', 'LineWidth', 1);
+x = linspace(-abs_max, abs_max, 100);
+y1 = x;
+y2 = -x;
+fill([x fliplr(x)], [y1 fliplr(y2)], 'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none');
+hold off;
 
 
 % stats
@@ -155,34 +174,37 @@ fprintf('Successfully analyzed neurons: %d\n', sum(~isnan(all_unitary_amplitudes
 
 % unitary amplitude stats
 fprintf('\n[Unitary Amplitude Statistics]\n');
-fprintf('Mean: %.4f\n', mean_amplitudes);
-fprintf('Median: %.4f\n', median_amplitudes);
+fprintf('Mean: %.4f\n', nanmean(all_unitary_amplitudes));
+fprintf('Median: %.4f\n', nanmedian(all_unitary_amplitudes));
 fprintf('Standard deviation: %.4f\n', std(all_unitary_amplitudes, 'omitnan'));
 fprintf('Range: %.4f to %.4f\n', min(all_unitary_amplitudes), max(all_unitary_amplitudes));
 
 % improvement stats
-fprintf('\n[Improvement Statistics]\n');
+fprintf('\n[Optimization of all neurons]\n');
+fprintf('Additive Metrics:\n');
 fprintf('Raw Error (median ± std): %.4f ± %.4f\n', ...
-    median(all_raw_metrics, 'omitnan'), std(all_raw_metrics, 'omitnan'));
-fprintf('optimized Error (median ± std): %.4f ± %.4f\n', ...
-    median(all_optimized_metrics, 'omitnan'), std(all_optimized_metrics, 'omitnan'));
-fprintf('Neurons with improvement: %.1f%%\n', ...
-    100 * sum(all_improvement_ratios < 1)/sum(~isnan(all_improvement_ratios)));
+    nanmedian(all_raw_metrics_additive), std(all_raw_metrics_additive, 'omitnan'));
+fprintf('Optimized Error (median ± std): %.4f ± %.4f\n', ...
+    nanmedian(all_optimized_metrics_additive), std(all_optimized_metrics_additive, 'omitnan'));
 
-% result distribution
-fprintf('\n[Result Distribution]\n');
-fprintf('Good result neurons (error < 0.05): %d (%.1f%%)\n', ...
-    length(neuron.good),100 * length(neuron.good)/sum(~isnan(all_raw_metrics)));
-fprintf('Moderate result neurons (0.05 ≤ error < 0.1): %d (%.1f%%)\n', ...
-    length(neuron.moderate),100 * length(neuron.moderate)/sum(~isnan(all_raw_metrics)));
-fprintf('Poor result neurons (error ≥ 0.1): %d (%.1f%%)\n', ...
-    length(neuron.poor),100 * length(neuron.poor)/sum(~isnan(all_raw_metrics)));
+fprintf('\nLogarithmic Metrics:\n');
+fprintf('Raw Error (mean ± std): %.4f ± %.4f\n', ...
+    nanmean(all_raw_metrics_log), std(all_raw_metrics_log, 'omitnan'));
+fprintf('Optimized Error (mean ± std): %.4f ± %.4f\n', ...
+    nanmean(all_optimized_metrics_log), std(all_optimized_metrics_log, 'omitnan'));
 
 
+%% Test the performance of prior parameters (unitary amplitdue & variance scaling) within a specific range across all neurons
+%%%
+%%%
+%%%
+%%%
+TestPriors();
 
-%% Function
 
-function [unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate, options)
+%% Functions
+
+function [unitary_amplitude, hb_gmm_model] = AnalyzeSpikesHBGMM(spike_rate, options)
 
     % default options based on our prior knowledge
     if ~exist('options', 'var')
@@ -201,9 +223,9 @@ function [unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate, opti
     [best_model, best_ll] = FitModel(X, F, max_components, options);
     
     % analyze results
-    [unitary_amplitude, vb_gmm_model] = AnalyzeResult(best_model, X, options);
+    [unitary_amplitude, hb_gmm_model] = AnalyzeResult(best_model, X, options);
 
-    Visualization(X, vb_gmm_model, unitary_amplitude, options);
+    Visualization(X, hb_gmm_model, unitary_amplitude, options);
 end
 
 
@@ -215,9 +237,9 @@ function options = SetDefault(options)
         options.max_spikes = 8;
     end
     
-    % typical variance scaling with amplitude
+    % variance scaling with amplitude
     if ~isfield(options, 'variance_scaling')
-        options.variance_scaling = 0.2; % Variance increases with mean
+        options.variance_scaling = 0.5; % 0.3 for 8s, 0.1 for 8m, 0.5 for 8f
     end
     
     % component weights (single spikes more common than doubles, doubles more than triples...)
@@ -233,7 +255,7 @@ function options = SetDefault(options)
 
     % priors combine gradient descent modeling and deconvolution
     if ~isfield(options, 'expected_unit_amp')
-        options.expected_unit_amp = 1.3013; % 1.7399 for 8s, 1.3013 for 8m
+        options.expected_unit_amp = 1.0; % 1.5 for 8s/8m, 1.0 for 8f
     end
 
 end
@@ -296,7 +318,7 @@ function [best_model, best_ll] = FitModel(X, F, max_components, options)
 end
 
 
-function [unitary_amplitude, vb_gmm_model] = AnalyzeResult(model, X, options)
+function [unitary_amplitude, hb_gmm_model] = AnalyzeResult(model, X, options)
 
     % component parameters
     weights = model.PComponents;
@@ -313,10 +335,10 @@ function [unitary_amplitude, vb_gmm_model] = AnalyzeResult(model, X, options)
     
     % first component mean as unitary amplitude estimate
     unitary_amplitude = sorted_means(1);
-    vb_gmm_model = model;
+    hb_gmm_model = model;
     
     % print analysis
-    fprintf('\nVB-GMM Analysis Results:\n');
+    fprintf('\nHB-GMM Analysis Results:\n');
     fprintf('Number of effective components: %d\n', sum(good_idx));
     fprintf('Unitary amplitude estimate: %.3f\n', unitary_amplitude);
     
@@ -369,7 +391,7 @@ function Visualization(X, model, unitary_amplitude, options)
     
     % plot sum of components
     plot(x, y_total, 'k--', 'LineWidth', 2, 'DisplayName', 'Sum of Components');
-    title('Spike Rate Distribution (VB-GMM Fit)');
+    title('Spike Rate Distribution (HB-GMM Fit)');
     xlabel('Spike Rate');
     ylabel('Probability Density');
     legend('show', 'Location', 'best');
@@ -395,5 +417,103 @@ function Visualization(X, model, unitary_amplitude, options)
     ylabel('Mean Value');
     legend('Actual Means', 'Expected Integer Multiples');
     grid on;
+end
+ 
+
+
+
+function TestPriors()
+   
+   cd('CASCADE/Results_for_autocalibration')
+   dataset_folder = 'DS30-GCaMP8f-m-V1';
+   dataset_name = 'GCaMP8f';
+   cd(dataset_folder)
+   neuron_files = dir('CAttached*.mat');
+   num_neurons = length(neuron_files);
+
+   % test range
+   test_ampitude = 0.5:0.5:8;
+   test_variance = 0.1:0.1:0.8;
+   [Amp, Var] = meshgrid(test_ampitude, test_variance);
+   
+   % initialize matrices to store results
+   additive_metrics = zeros(length(test_variance), length(test_ampitude), num_neurons);
+   log_metrics = zeros(length(test_variance), length(test_ampitude), num_neurons);
+   
+   for file_idx = 1:num_neurons
+       fprintf('Processing neuron %d/%d\n', file_idx, num_neurons);
+       
+       data = load(neuron_files(file_idx).name);
+       event_detection = data.spike_rates_GC8 > 0.3;
+       labels = bwlabel(event_detection);
+       A = regionprops(labels);
+       
+       spike_rate_per_event = zeros(numel(A), 1);
+       spike_rate_per_event_GT = zeros(numel(A), 1);
+       
+       for k = 1:numel(A)
+           range_values = round(A(k).BoundingBox(1):(A(k).BoundingBox(1)+A(k).BoundingBox(3)));
+           spike_rate_per_event(k) = sum(data.spike_rates_GC8(range_values(1)-2:range_values(end)+2));
+           spike_rate_per_event_GT(k) = sum(data.ground_truth(range_values(1)-2:range_values(end)+2));
+       end
+       
+       % test different parameter combinations
+       for i = 1:length(test_variance)
+           for j = 1:length(test_ampitude)
+               options = struct();
+               options.expected_unit_amp = test_ampitude(j);
+               options.variance_scaling = test_variance(i);
+               
+               try
+                   X = spike_rate_per_event(~isnan(spike_rate_per_event));
+                   options = SetDefault(options);
+                   [F, max_components] = InitializeModel(X, options);
+                   [model, ~] = FitModel(X, F, max_components, options);
+                   [sorted_means, ~] = sort(model.mu);
+                   unit_amp = sorted_means(1);
+                   optimized_spike_rate = spike_rate_per_event/unit_amp;
+                   detect_events = abs(spike_rate_per_event_GT - 1) < 0.5;
+                   
+                   if sum(detect_events) > 0
+                       additive_metrics(i,j,file_idx) = nanmedian(optimized_spike_rate(detect_events)) - 1;
+                       log_metrics(i,j,file_idx) = nanmedian(log(optimized_spike_rate(detect_events)));
+                   end
+
+               catch ER
+                   fprintf('Warning: Failed for neuron %d, amp=%.2f, var=%.2f: %s\n', ...
+                       file_idx, test_ampitude(j), test_variance(i), ER.message);
+                   additive_metrics(i,j,file_idx) = NaN;
+                   log_metrics(i,j,file_idx) = NaN;
+               end
+           end
+       end
+   end
+   
+   % mean across all neurons
+   mean_additive = nanmean(additive_metrics,3);
+   mean_log = nanmean(log_metrics,3);
+   
+
+   figure('Position', [100, 100, 1500, 1000]);
+   
+   % plot 1: Additive Error
+   subplot(1,2,1);
+   surf(Amp, Var, abs(mean_additive));
+   xlabel('Initial Amplitude');
+   ylabel('Variance Scaling');
+   zlabel('Additive Error');
+   title('Effects on Additive Error');
+   colorbar;
+   
+   % plot 2: Log Error
+   subplot(1,2,2);
+   surf(Amp, Var, abs(mean_log));
+   xlabel('Initial Amplitude');
+   ylabel('Variance Scaling');
+   zlabel('Log Error');
+   title('Effects on Logarithmic Error');
+   colorbar;
+
+   sgtitle(sprintf('Parameter Effects Analysis for Dataset %s', dataset_name));
 end
 

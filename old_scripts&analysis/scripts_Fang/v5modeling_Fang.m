@@ -1,4 +1,4 @@
-%% Modeling for a single neuron
+%% GD Modeling
 
 
 cd('Autocalibrated-spike-inference/GT_autocalibration')
