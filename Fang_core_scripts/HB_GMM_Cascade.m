@@ -2,10 +2,11 @@
 
 % preparations
 cd('CASCADE/Results_for_autocalibration')
-dataset_folder = 'DS31-GCaMP8m-m-V1';
-dataset_name = 'GCaMP8m';
+dataset_folder = 'DS32-GCaMP8s-m-V1';
+dataset_name = 'GCaMP8s';
 cd(dataset_folder)
 neuron_files = dir('CAttached*.mat');
+
 
 % initialize arrays
 all_raw_metrics_log = [];
@@ -18,6 +19,9 @@ all_component_counts = [];
 all_component_weights = {};
 all_component_means = {};
 
+all_spike_rates = cell(length(neuron_files), 1);
+all_spike_rates_GT = cell(length(neuron_files), 1);
+all_optimized_rates = cell(length(neuron_files), 1);
 
 for file_idx = 1:length(neuron_files)
     fprintf('\nProcessing file %d/%d: %s\n', file_idx, length(neuron_files), neuron_files(file_idx).name);
@@ -81,8 +85,13 @@ for file_idx = 1:length(neuron_files)
             all_optimized_metrics_additive(file_idx) = optimized_metric_additive;
             all_raw_metrics_log(file_idx) = raw_metric_log;
             all_optimized_metrics_log(file_idx) = optimized_metric_log;
+
+            all_spike_rates{file_idx} = spike_rate_per_event;
+            all_spike_rates_GT{file_idx} = spike_rate_per_event_GT;
+            all_optimized_rates{file_idx} = optimized_spike_rate;
             
         end
+
 
     catch ER
         fprintf('Warning: Analysis failed for file %d: %s\n', file_idx, ER.message);
@@ -96,8 +105,8 @@ for file_idx = 1:length(neuron_files)
         all_component_weights{file_idx} = NaN;
         all_component_means{file_idx} = NaN;
     end
-
 end
+
 
 
 % Visualization and Statistical Analysis
@@ -239,7 +248,7 @@ function options = SetDefault(options)
     
     % variance scaling with amplitude
     if ~isfield(options, 'variance_scaling')
-        options.variance_scaling = 0.5; % 0.3 for 8s, 0.1 for 8m, 0.5 for 8f
+        options.variance_scaling = 0.4; % approximately, 0.2 for s/m, 0.4 for f
     end
     
     % component weights (single spikes more common than doubles, doubles more than triples...)
@@ -254,8 +263,9 @@ function options = SetDefault(options)
     end
 
     % priors combine gradient descent modeling and deconvolution
+    % approximately 1.5, the normal range should be 1.0-2.0
     if ~isfield(options, 'expected_unit_amp')
-        options.expected_unit_amp = 1.0; % 1.5 for 8s/8m, 1.0 for 8f
+        options.expected_unit_amp = 1.5;
     end
 
 end
@@ -425,15 +435,15 @@ end
 function TestPriors()
    
    cd('CASCADE/Results_for_autocalibration')
-   dataset_folder = 'DS30-GCaMP8f-m-V1';
-   dataset_name = 'GCaMP8f';
+   dataset_folder = 'DS32-GCaMP8s-m-V1';
+   dataset_name = 'GCaMP8s';
    cd(dataset_folder)
    neuron_files = dir('CAttached*.mat');
    num_neurons = length(neuron_files);
 
    % test range
-   test_ampitude = 0.5:0.5:8;
-   test_variance = 0.1:0.1:0.8;
+   test_ampitude = 0.4:0.2:3;
+   test_variance = 0.1:0.1:0.5;
    [Amp, Var] = meshgrid(test_ampitude, test_variance);
    
    % initialize matrices to store results
@@ -515,5 +525,27 @@ function TestPriors()
    colorbar;
 
    sgtitle(sprintf('Parameter Effects Analysis for Dataset %s', dataset_name));
+   
+   % 2D view
+   figure('Position', [100, 100, 1500, 1000]); 
+
+   subplot(1,2,1);
+   imagesc(unique(Amp(1,:)), unique(Var(:,1)), abs(mean_additive));
+   xlabel('Initial Amplitude');
+   ylabel('Variance Scaling');
+   title('Effect on Additive Error');
+   colorbar;
+   axis xy;
+   
+   subplot(1,2,2);
+   imagesc(unique(Amp(1,:)), unique(Var(:,1)), abs(mean_log));
+   xlabel('Initial Amplitude');
+   ylabel('Variance Scaling');
+   title('Effect on Logarithmic Error');
+   colorbar;
+   axis xy;
+   
+   sgtitle(sprintf('2D - Parameter Effects Analysis for Dataset %s', dataset_name));
+
 end
 
