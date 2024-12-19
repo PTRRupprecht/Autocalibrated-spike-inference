@@ -28,6 +28,10 @@ for file_idx = 1:length(neuron_files)
     
     load(neuron_files(file_idx).name);
     
+    % testing
+    %spike_rates_GC8 = spike_rates_GC8 * 10;
+    %ground_truth = ground_truth * 10;
+
     % threshold deconvolved trace
     event_detection = spike_rates_GC8 > 0.3;
     
@@ -174,6 +178,13 @@ y2 = -x;
 fill([x fliplr(x)], [y1 fliplr(y2)], 'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none');
 hold off;
 
+% example rates
+figure; 
+plot(all_spike_rates_GT{1},'r'); 
+hold on; 
+plot(all_spike_rates{1},'b'); 
+plot(all_optimized_rates{1},'g');
+
 
 % stats
 % print analysis summary
@@ -248,7 +259,7 @@ function options = SetDefault(options)
     
     % variance scaling with amplitude
     if ~isfield(options, 'variance_scaling')
-        options.variance_scaling = 0.4; % approximately, 0.2 for s/m, 0.4 for f
+        options.variance_scaling = 0.2; % approximately, 0.2 for s/m, 0.4 for f
     end
     
     % component weights (single spikes more common than doubles, doubles more than triples...)
