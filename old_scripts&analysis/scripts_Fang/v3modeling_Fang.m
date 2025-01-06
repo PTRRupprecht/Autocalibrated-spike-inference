@@ -1,15 +1,13 @@
-%% Modeling for a single neuron
+%% Modeling for a single neuron (evaluate the performance of GD)
 
 
 % load the data
 data = load('CAttached_jGCaMP8s_472181_1_mini.mat');
 CAttached = data.CAttached;
 
-
-% plot each cell in a separate subplot
+figure;
 nRows = ceil(length(CAttached) / 2);
 nCols = min(length(CAttached), 2);
-figure;
 
 error_bef = [];
 
@@ -64,7 +62,7 @@ for i = 1:length(CAttached)
     plot(time, measured_trace, 'b', time, simulated_trace, 'r');
     legend('Measured', 'Simulated');
     xlabel('Time (s)');
-    ylabel('Fluorescence');
+    ylabel('ΔF/F');
     title(['Measured vs Simulated Calcium Trace for recording ', num2str(i)]);
 
     % compute error (MSE)
@@ -76,6 +74,10 @@ end
 %% Optimize parameters using Gradient Descent with Adaptive Iterations
 
 error_aft = [];
+figure;
+nRows = ceil(length(CAttached) / 2);
+nCols = min(length(CAttached), 2);
+
 
 % loop through each cell in CAttached
 for i = 1:length(CAttached)
@@ -88,14 +90,14 @@ for i = 1:length(CAttached)
     measured_trace = cell_data.fluo_mean;
 
     % initial parameter values
-    amplitude = 1.68;
+    amplitude = 1.0;
     tau_rise = 0.05;
     tau_decay = 0.5;
     baseline = nanmedian(measured_trace);
 
     % Gradient Descent parameters
     learning_rate = 0.01;
-    max_iterations = 5e3;  % maximum number of iterations
+    max_iterations = 5000;  % maximum number of iterations
     convergence_threshold = 1e-6;  % threshold for change in error
     
     % initialize variables for adaptive iterations
@@ -175,12 +177,12 @@ for i = 1:length(CAttached)
     error = mean((measured_trace - simulated_trace).^2);
 
     % plot the optimized simulated trace
-    figure;
-    plot(time, measured_trace, 'b', time, simulated_trace, 'r');
-    legend('Measured', 'Optimized Simulated');
+    subplot(nRows, nCols, i); 
+    plot(time, measured_trace, 'b', time, simulated_trace, 'g');
+    legend('Measured', 'Simulated');
     xlabel('Time (s)');
-    ylabel('Fluorescence');
-    title(['Optimized Simulated Calcium Trace for recording ', num2str(i)]);
+    ylabel('ΔF/F');
+    title(['Measured vs Simulated Calcium Trace for recording ', num2str(i)]);
 
     error_aft = [error_aft, error];
 

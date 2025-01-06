@@ -1,19 +1,29 @@
 %% Optimization
 
 % try to improve inference with amplitude
-unitary_amplitude = 1.1416;
+unitary_amplitude = 1.2001;
 corrected_spike_rate_per_event = spike_rate_per_event/unitary_amplitude;
 
 detect_events = find(abs(spike_rate_per_event_GT - 1) < 0.5);
 
 % quantative accuracy
+raw_metric = nanmedian(spike_rate_per_event(detect_events)) - 1;
+raw_metric_log = nanmedian(log(spike_rate_per_event(detect_events)));
 metric = nanmedian(corrected_spike_rate_per_event(detect_events)) - 1;
+metric_log = nanmedian(log(corrected_spike_rate_per_event(detect_events)));
 
+figure; 
+plot(spike_rate_per_event_GT,'r'); 
+hold on; 
+plot(spike_rate_per_event,'b'); 
+plot(corrected_spike_rate_per_event,'g');
+xlabel('Time(s)');
+ylabel('\DeltaF/F');
 
-%% Variational Bayesian GMM
+%% Variational Bayesian GMM for a single neuron
 
 % load the dataset
-load('CAttached_jGCaMP8s_472182_6_mini')
+load('CAttached_jGCaMP8s_472181_1_mini')
 
 % threshold deconvolved trace --> threshold not optimized!
 event_detection = spike_rates_GC8 > 0.3;
@@ -44,12 +54,12 @@ end
 
 %figure, histogram(spike_rate_per_event, 100);
 %figure, histogram(spike_rate_per_event_GT, 100);
-[unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate_per_event);
+[unitary_amplitude, hb_gmm_model] = AnalyzeSpikesHBGMM(spike_rate_per_event);
 
 
 %% Function
 
-function [unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate, options)
+function [unitary_amplitude, hb_gmm_model] = AnalyzeSpikesHBGMM(spike_rate, options)
 
     % default options based on our prior knowledge
     if ~exist('options', 'var')
@@ -57,9 +67,6 @@ function [unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate, opti
     end
     
     options = SetDefault(options);
-    
-    % random seed for reproducibility
-    rng(2024);
     
     % load data and handle NaN
     X = spike_rate(~isnan(spike_rate));
@@ -71,9 +78,9 @@ function [unitary_amplitude, vb_gmm_model] = AnalyzeSpikesVBGMM(spike_rate, opti
     [best_model, best_ll] = FitModel(X, F, max_components, options);
     
     % analyze results
-    [unitary_amplitude, vb_gmm_model] = AnalyzeResult(best_model, X, options);
+    [unitary_amplitude, hb_gmm_model] = AnalyzeResult(best_model, X, options);
 
-    Visualization(X, vb_gmm_model, unitary_amplitude, options);
+    Visualization(X, hb_gmm_model, unitary_amplitude, options);
 end
 
 
@@ -103,7 +110,7 @@ function options = SetDefault(options)
 
     % priors combine gradient descent modeling and deconvolution
     if ~isfield(options, 'expected_unit_amp')
-        options.expected_unit_amp = 1.3013;
+        options.expected_unit_amp = 1.5;
     end
 
 end
@@ -186,7 +193,7 @@ function [unitary_amplitude, vb_gmm_model] = AnalyzeResult(model, X, options)
     vb_gmm_model = model;
     
     % print analysis
-    fprintf('\nVB-GMM Analysis Results:\n');
+    fprintf('\nHB-GMM Analysis Results:\n');
     fprintf('Number of effective components: %d\n', sum(good_idx));
     fprintf('Unitary amplitude estimate: %.3f\n', unitary_amplitude);
     
@@ -212,17 +219,12 @@ function Visualization(X, model, unitary_amplitude, options)
     histogram(X_plot, 50, 'Normalization', 'pdf', 'FaceAlpha', 0.3);
     hold on;
     
-    % generate points of plotting
     x = linspace(min(X_plot), max(X_plot), 200);
     y_total = zeros(size(x));
-    
-    % get components
     weights = model.PComponents;
     means = model.mu;
     sigmas = sqrt(squeeze(model.Sigma));
     good_idx = weights > options.weight_threshold;
-    
-    % plot components
     cmap = lines(sum(good_idx));
     component_idx = 1;
     
@@ -237,22 +239,18 @@ function Visualization(X, model, unitary_amplitude, options)
         end
     end
     
-    % plot sum of components
     plot(x, y_total, 'k--', 'LineWidth', 2, 'DisplayName', 'Sum of Components');
-    title('Spike Rate Distribution (VB-GMM Fit)');
+    title('Spike Rate Distribution (HB-GMM Fit)');
     xlabel('Spike Rate');
     ylabel('Probability Density');
+    text(-0.05, 1.05, 'A', 'Units', 'normalized', 'FontSize', 14, 'FontWeight', 'bold');
     legend('show', 'Location', 'best');
     grid on;
     
     % plot 2: component analysis
     subplot(2,1,2);
-    
-    % get sorted good components
     good_means = means(good_idx);
     [sorted_means, sort_idx] = sort(good_means);
-    
-    % bar plot of component means
     bar(sorted_means, 'FaceColor', [0.4 0.6 0.8]);
     hold on;
     
@@ -263,6 +261,7 @@ function Visualization(X, model, unitary_amplitude, options)
     title('Component Mean Analysis');
     xlabel('Component Number');
     ylabel('Mean Value');
+    text(-0.05, 1.05, 'B', 'Units', 'normalized', 'FontSize', 14, 'FontWeight', 'bold');
     legend('Actual Means', 'Expected Integer Multiples');
     grid on;
 end

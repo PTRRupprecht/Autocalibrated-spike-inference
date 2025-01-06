@@ -5,8 +5,8 @@ cd('Autocalibrated-spike-inference/GT_autocalibration')
 
 
 % preparations
-dataset_folder = 'DS31-GCaMP8m-m-V1';
-dataset_name = 'GCaMP8m';
+dataset_folder = 'DS32-GCaMP8s-m-V1';
+dataset_name = 'GCaMP8s';
 cd(dataset_folder)
 
 neuron_files = dir('CAttached*.mat');
@@ -125,7 +125,7 @@ function [optimized_amplitude, optimized_tau_rise, optimized_tau_decay, final_er
     drift = movquant(measured_trace', 0.10, 4000, 1, 'omitnan', 'zeropad');
     
     % initial parameters
-    amplitude = 1.68;
+    amplitude = 1.2;
     tau_rise = 0.05;
     tau_decay = 0.5;
     %baseline = nanmedian(measured_trace);

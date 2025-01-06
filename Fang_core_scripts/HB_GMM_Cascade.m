@@ -123,6 +123,7 @@ boxplot([all_raw_metrics_additive', all_optimized_metrics_additive'], ...
     'Labels', {'Raw', 'Optimized'}, 'Notch', 'on');
 title('Additive Metrics: Raw vs Optimized');
 ylabel('Additive Error');
+text(-0.1, 1.05, 'A', 'Units', 'normalized', 'FontSize', 14, 'FontWeight', 'bold');
 grid on;
 
 
@@ -132,6 +133,7 @@ boxplot([all_raw_metrics_log', all_optimized_metrics_log'], ...
     'Labels', {'Raw', 'Optimized'}, 'Notch', 'on');
 title('Logarithmic Metrics: Raw vs Optimized');
 ylabel('Logarithmic Error');
+text(-0.1, 1.05, 'B', 'Units', 'normalized', 'FontSize', 14, 'FontWeight', 'bold');
 grid on;
 
 
@@ -142,6 +144,7 @@ scatter(all_raw_metrics_additive, all_optimized_metrics_additive, 'filled', 'Mar
 hold on;
 xlabel('Raw Additive Error');
 ylabel('Optimized Additive Error');
+text(-0.1, 1.05, 'C', 'Units', 'normalized', 'FontSize', 14, 'FontWeight', 'bold');
 grid on;
 title('Additive Error Comparison')
 % add lines and shadow
@@ -164,6 +167,7 @@ scatter(all_raw_metrics_log, all_optimized_metrics_log, 'filled', 'MarkerFaceAlp
 hold on;
 xlabel('Raw Logarithmic Error');
 ylabel('Optimized Logarithmic Error');
+text(-0.1, 1.05, 'D', 'Units', 'normalized', 'FontSize', 14, 'FontWeight', 'bold');
 grid on;
 title('Logarithmic Error Comparison');
 hold on;
@@ -178,19 +182,25 @@ y2 = -x;
 fill([x fliplr(x)], [y1 fliplr(y2)], 'g', 'FaceAlpha', 0.1, 'EdgeColor', 'none');
 hold off;
 
-% example rates
-figure; 
+% example plot
+bad_indices = find(abs(all_optimized_metrics_log) > abs(all_raw_metrics_log)); % or plot the bad one
+good_results = length(neuron_files) - length(bad_indices);
+
+figure;
 plot(all_spike_rates_GT{1},'r'); 
 hold on; 
 plot(all_spike_rates{1},'b'); 
 plot(all_optimized_rates{1},'g');
+xlabel('Indices');
+ylabel('Spike Rate (Hz)');
+legend('Ground Truth','CASCADE','HBGMM');
 
 
 % stats
 % print analysis summary
 fprintf('\n$$$ Analysis Summary for %s $$$\n', dataset_name);
 fprintf('Total number of neurons analyzed: %d\n', length(neuron_files));
-fprintf('Successfully analyzed neurons: %d\n', sum(~isnan(all_unitary_amplitudes)));
+fprintf('Successfully analyzed neurons: %d\n', good_results);
 
 % unitary amplitude stats
 fprintf('\n[Unitary Amplitude Statistics]\n');
@@ -259,7 +269,7 @@ function options = SetDefault(options)
     
     % variance scaling with amplitude
     if ~isfield(options, 'variance_scaling')
-        options.variance_scaling = 0.2; % approximately, 0.2 for s/m, 0.4 for f
+        options.variance_scaling = 0.2; % typically, s/m=0.2, f=0.1
     end
     
     % component weights (single spikes more common than doubles, doubles more than triples...)
